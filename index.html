@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attendance Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#6c63ff;--accent2:#ff6584;--green:#00c9a7;--amber:#ffb347;--purple:#7c3aed;--card-r:14px;}
+[data-theme="dark"]{--bg:#0f1117;--surface:#1a1d27;--border:#2a2d3a;--text:#e8eaf0;--muted:#6b7280;--row-hover:rgba(108,99,255,.06);--input-bg:#1a1d27;--th-bg:#13151f;--foot-bg:#13151f;--pill-bg:rgba(108,99,255,.15);--pill-txt:#a89fff;--panel-bg:#13151f;--overlay:rgba(0,0,0,.55);}
+[data-theme="light"]{--bg:#f3f4f8;--surface:#ffffff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--row-hover:#f5f8ff;--input-bg:#f9fafb;--th-bg:#f9fafb;--foot-bg:#f9fafb;--pill-bg:#eff6ff;--pill-txt:#1d4ed8;--panel-bg:#ffffff;--overlay:rgba(0,0,0,.3);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;transition:background .25s,color .25s;}
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 36px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;transition:background .25s,border-color .25s;}
+.header h1{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header p{color:var(--muted);font-size:13px;margin-top:3px;}
+.header-right{display:flex;align-items:center;gap:12px;}
+.updated{font-size:12px;color:var(--muted);}
+.btn-nav{padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;font-family:'Inter',sans-serif;cursor:pointer;text-decoration:none;font-weight:500;transition:all .15s;white-space:nowrap;}
+.btn-nav:hover{border-color:var(--accent);color:var(--text);}
+.btn-nav.emp{border-color:var(--green);color:var(--green);}
+.btn-nav.emp:hover{background:var(--green);color:#fff;}
+.btn-nav.rep{border-color:var(--amber);color:var(--amber);}
+.btn-nav.rep:hover{background:var(--amber);color:#fff;}
+.btn-nav.day{border-color:var(--accent);color:var(--accent);}
+.btn-nav.day:hover{background:var(--accent);color:#fff;}
+.toggle-wrap{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer;}
+.toggle input{display:none;}
+.track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s;}
+.toggle input:checked~.track{background:var(--accent);}
+.thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s;}
+.toggle input:checked~.thumb{left:23px;}
+.tabs{display:flex;gap:0;padding:20px 36px 0;}
+.tab{padding:10px 24px;font-size:14px;font-weight:500;border:1px solid var(--border);cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s;}
+.tab:first-child{border-radius:8px 0 0 8px;}
+.tab:last-child{border-radius:0 8px 8px 0;}
+.tab:not(:first-child){border-left:none;}
+.tab.active-face{background:#6c63ff;color:#fff;border-color:#6c63ff;}
+.tab.active-fingerprint{background:#00c9a7;color:#fff;border-color:#00c9a7;}
+.tab.active-greathr{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+.tab:not([class*="active"]):hover{color:var(--text);}
+.controls{padding:16px 36px 12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.controls label{font-size:13px;color:var(--muted);font-weight:500;}
+.controls input,.controls select{height:38px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:0 12px;border-radius:8px;font-size:14px;outline:none;font-family:'Inter',sans-serif;transition:border-color .15s,background .25s;}
+.controls input:focus,.controls select:focus{border-color:var(--accent);}
+.controls input[type="text"]{width:220px;}
+.controls input[type="date"]{width:155px;}
+.controls input::placeholder{color:var(--muted);}
+.controls select option{background:var(--surface);}
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator{filter:invert(1);}
+input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;}
+.sep{width:1px;height:22px;background:var(--border);margin:0 2px;}
+.btn-clear{height:38px;padding:0 16px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;cursor:pointer;font-size:14px;font-family:'Inter',sans-serif;transition:all .15s;}
+.btn-clear:hover{border-color:var(--accent);color:var(--text);}
+.count-pill{margin-left:auto;font-size:13px;color:var(--pill-txt);background:var(--pill-bg);padding:4px 14px;border-radius:20px;font-weight:500;white-space:nowrap;}
+.legend{margin:0 36px 14px;display:flex;gap:18px;flex-wrap:wrap;align-items:center;font-size:12.5px;color:var(--muted);}
+.legend-item{display:inline-flex;align-items:center;gap:6px;}
+.legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.table-wrap{margin:0 36px 40px;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);overflow:hidden;transition:background .25s,border-color .25s;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
+thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
+thead th:first-child{width:52px;text-align:center;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--row-hover);}
+tbody td{padding:13px 16px;font-size:15px;vertical-align:middle;}
+tbody td:first-child{text-align:center;color:var(--muted);font-size:13px;}
+.emp{
+    font-weight:600;
+    cursor:pointer;
+    color:var(--text);
+    transition:color .15s;
+}
+
+tbody tr:hover .emp,
+tbody tr:hover .pnch,
+tbody tr:hover .pnch-mode,
+tbody tr:hover .pnch-total,
+tbody tr:hover .pnch-sep{
+    color:var(--accent);
+}
+tbody tr:hover .badge{
+    transform:translateY(-1px);
+}
+.emp-id-col{font-size:13px;color:var(--muted);font-family:'Space Grotesk',sans-serif;}
+.date-val{color:var(--muted);font-size:14px;}
+.t-in{color:var(--green);font-weight:600;}
+.t-out{color:var(--accent2);font-weight:600;}
+.hrs{font-weight:600;}
+/* punch count: mode part bold, total part muted */
+.pnch-mode{
+    font-weight:600;
+    color:var(--text);
+    transition:.15s;
+}
+
+.pnch-mode{font-weight:600;color:var(--text);}
+.pnch-sep{color:var(--muted);margin:0 2px;}
+.pnch-total{color:var(--muted);}
+.badge{
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    padding:4px 10px;
+    border-radius:4px;
+    font-size:12px;
+    font-weight:600;
+    transition:transform .18s ease;
+}.badge::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+.badge-full{background:rgba(0,201,167,.12);color:var(--green);}.badge-full::before{background:var(--green);}
+.badge-half{background:rgba(255,179,71,.12);color:var(--amber);}.badge-half::before{background:var(--amber);}
+.badge-short{background:rgba(255,101,132,.12);color:var(--accent2);}.badge-short::before{background:var(--accent2);}
+.tfoot-row{padding:10px 16px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:13px;color:var(--muted);display:flex;justify-content:space-between;transition:background .25s;}
+.no-data{text-align:center;padding:56px;color:var(--muted);}
+.no-data small{display:block;font-size:13px;margin-top:6px;}
+
+/* ── Panel ── */
+.overlay{display:none;position:fixed;inset:0;background:var(--overlay);z-index:100;}
+.overlay.open{display:block;}
+.panel{position:fixed;top:0;right:-580px;width:560px;height:100vh;background:var(--panel-bg);border-left:1px solid var(--border);z-index:101;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+.panel.open{right:0;}
+.panel-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--panel-bg);z-index:1;}
+.panel-header h2{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
+.ph-sub{font-size:13px;color:var(--muted);margin-top:3px;}
+.btn-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;flex-shrink:0;margin-left:12px;}
+.btn-close:hover{color:var(--text);border-color:var(--muted);}
+.panel-body{padding:20px 24px;flex:1;}
+
+/* emp card */
+.panel-emp-header{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+.panel-emp-name{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;}
+.panel-emp-id{font-size:13px;color:var(--muted);margin-top:3px;}
+.panel-mode-pills{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.mode-pill{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;}
+.mode-face{background:rgba(108,99,255,.15);color:#a89fff;}
+.mode-fp{background:rgba(0,201,167,.15);color:var(--green);}
+.mode-ghr{background:rgba(124,58,237,.15);color:#c084fc;}
+
+/* stat row */
+.panel-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.panel-stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;}
+.ps-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.ps-val{font-size:20px;font-weight:700;margin-top:5px;}
+
+.panel-section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.panel-day-label{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+
+.panel-table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.panel-table{width:100%;border-collapse:collapse;font-size:13px;}
+.panel-table thead tr{background:var(--th-bg);border-bottom:1px solid var(--border);}
+.panel-table thead th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.panel-table tbody tr{border-bottom:1px solid var(--border);}
+.panel-table tbody tr:last-child{border-bottom:none;}
+.panel-table tbody tr:hover{background:var(--row-hover);}
+.panel-table tbody td{padding:10px 12px;}
+.panel-foot{padding:8px 12px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+
+.punch-in{color:var(--green);font-weight:600;}
+.punch-out{color:var(--accent2);font-weight:600;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Attendance Dashboard</h1>
+    <p>Face, Fingerprint &amp; Great HR Attendance Records</p>
+  </div>
+  <div class="header-right">
+    <span class="updated" id="updated">—</span>
+    <a href="employee.html" class="btn-nav emp">👤 Employee Lookup</a>
+    <a href="dayview.html"  class="btn-nav day">📅 View by Date</a>
+    <a href="reports.html"  class="btn-nav rep">📊 Reports</a>
+    <div class="toggle-wrap">
+      <span>☀️</span>
+      <label class="toggle">
+        <input type="checkbox" id="themeToggle" checked onchange="toggleTheme()">
+        <div class="track"></div><div class="thumb"></div>
+      </label>
+      <span>🌙</span>
+    </div>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active-face"  id="tab-face"        onclick="switchMode('face')">👤 Face</div>
+  <div class="tab"              id="tab-fingerprint" onclick="switchMode('fingerprint')">🖐 Fingerprint</div>
+  <div class="tab"              id="tab-greathr"     onclick="switchMode('greathr')">📱 Great HR</div>
+</div>
+
+<div class="controls">
+  <input type="text"  id="search"   placeholder="🔍 Name or Employee ID…" oninput="render()">
+  <div class="sep"></div>
+  <label>From</label><input type="date" id="dateFrom" onchange="render()">
+  <label>To</label>  <input type="date" id="dateTo"   onchange="render()">
+  <div class="sep"></div>
+  <select id="sortBy" onchange="render()">
+    <option value="date_desc">Date — Newest First</option>
+    <option value="date_asc">Date — Oldest First</option>
+    <option value="hours_desc">Hours — Highest First</option>
+    <option value="hours_asc">Hours — Lowest First</option>
+  </select>
+  <button class="btn-clear" onclick="clearFilters()">✕ Clear</button>
+  <span class="count-pill" id="count-pill">Loading…</span>
+</div>
+
+<div class="legend">
+  <span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Early Login (&lt;09:30)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:#4a9eff"></span>On Time (09:30–09:45)</span>
+  <span class="legend-item"><span class="legend-dot" style="background:var(--amber)"></span>Late Login (&gt;09:45)</span>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>#</th><th>Emp ID</th><th>Employee</th><th>Date</th>
+        <th>First In</th><th>Last Out</th><th>Hours</th><th>Punches</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr><td colspan="9"><div class="no-data">Loading records…</div></td></tr>
+    </tbody>
+  </table>
+  <div class="tfoot-row">
+    <span id="foot-left">—</span>
+    <span>Click any row to see punch details for that day</span>
+  </div>
+</div>
+
+<!-- Overlay + Panel -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="panel" id="panel">
+  <div class="panel-header">
+    <div>
+      <h2 id="panel-name">—</h2>
+      <div class="ph-sub" id="panel-id">—</div>
+    </div>
+    <button class="btn-close" onclick="closePanel()">×</button>
+  </div>
+  <div class="panel-body">
+
+    <!-- Employee card -->
+    <div class="panel-emp-header">
+      <div class="panel-emp-name" id="pe-name">—</div>
+      <div class="panel-emp-id"   id="pe-id">—</div>
+      <div class="panel-mode-pills" id="pe-modes"></div>
+    </div>
+
+    <!-- Stats for this specific day -->
+    <div class="panel-stat-row">
+      <div class="panel-stat">
+        <div class="ps-label">First In</div>
+        <div class="ps-val" id="ps-firstin" style="color:var(--green);font-size:16px">—</div>
+      </div>
+      <div class="panel-stat">
+        <div class="ps-label">Last Out</div>
+        <div class="ps-val" id="ps-lastout" style="color:var(--accent2);font-size:16px">—</div>
+      </div>
+      <div class="panel-stat">
+        <div class="ps-label">Total Punches</div>
+        <div class="ps-val" id="ps-punches" style="color:var(--accent)">—</div>
+      </div>
+    </div>
+
+    <!-- Day label -->
+    <div class="panel-day-label" id="panel-day-label">📅 —</div>
+
+    <!-- Punch Details for this day only -->
+    <div id="pv-punches">
+      <div class="panel-section-title">Punch Events for This Day</div>
+      <div class="panel-table-wrap">
+        <table class="panel-table">
+          <thead>
+            <tr><th>#</th><th>Time</th><th>Punch</th><th>Mode</th><th>Device</th></tr>
+          </thead>
+          <tbody id="punch-tbody"></tbody>
+        </table>
+        <div class="panel-foot" id="punch-foot">—</div>
+      </div>
+    </div>
+
+  </div><!-- /panel-body -->
+</div><!-- /panel -->
+
+<script>
+let faceData=[], fpData=[], ghrData=[], punchData=[];
+let currentMode = "face";
+let panelContext = null; // {name, date, uid}
+
+/* ── Theme ── */
+function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
+const st=localStorage.getItem("attendance-theme");
+if(st){document.documentElement.setAttribute("data-theme",st);document.getElementById("themeToggle").checked=st==="dark";}
+
+/* ── Load data ── */
+Promise.all([
+  fetch("face_summary.json").then(r=>r.json()),
+  fetch("fingerprint_summary.json").then(r=>r.json()),
+  fetch("greathr_summary.json").then(r=>r.json()),
+  fetch("punch_details.json").then(r=>r.json()),
+]).then(([f,fp,g,pd])=>{
+  faceData=f; fpData=fp; ghrData=g; punchData=pd;
+  const time = new Date().toLocaleTimeString("en-IN",{
+    hour:"2-digit",
+    minute:"2-digit"
+});
+
+document.getElementById("updated").innerHTML =
+`<div style="text-align:right">
+    <div style="font-size:11px;color:var(--muted)">Last synced</div>
+    <div style="font-weight:600">${time}</div>
+</div>`;
+  render();
+}).catch(()=>{
+  document.getElementById("tbody").innerHTML=`<tr><td colspan="9"><div class="no-data">⚠ Could not load JSON files<small>Run python attendance.py then python -m http.server 8000</small></div></td></tr>`;
+  document.getElementById("count-pill").textContent="Error";
+});
+
+/* ── Mode switch ── */
+function switchMode(mode){
+  currentMode=mode;
+  ["face","fingerprint","greathr"].forEach(m=>{
+    document.getElementById("tab-"+m).className="tab"+(m===mode?" active-"+m:"");
+  });
+  render();
+}
+function formatHours(hours){
+    hours = Number(hours);
+
+    if(Number.isInteger(hours)){
+        return `${hours}h`;
+    }
+
+    return `${hours.toFixed(1).replace(/\.0$/,"")}h`;
+}
+function currentData(){
+  if(currentMode==="face")        return faceData;
+  if(currentMode==="fingerprint") return fpData;
+  return ghrData;
+}
+
+function formatDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});}
+function formatDateLong(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});}
+
+/* ── Cross-mode helpers ── */
+// Returns {firstIn, lastOut, hours, totalPunches, modePunches} for a given name+date
+function getCrossModeTimes(name, date, mode) {
+  const allForDay = punchData.filter(p => p.Name === name && (p.Date||"").slice(0,10) === date);
+  const modePunches = allForDay.filter(p => p.Mode === mode).length;
+  const totalPunches = allForDay.length;
+
+  const officialTimes = allForDay
+    .filter(p => p.Mode === "face" || p.Mode === "greathr")
+    .map(p => p.Time).sort();
+
+  if (officialTimes.length === 0) {
+    return { firstIn: "—", lastOut: "—", hours: "—", totalPunches, modePunches };
+  }
+  if (officialTimes.length === 1) {
+    return { firstIn: officialTimes[0].slice(0,5), lastOut: "—", hours: "—", totalPunches, modePunches };
+  }
+
+  const firstIn = officialTimes[0].slice(0,5);
+  const lastOut = officialTimes[officialTimes.length - 1].slice(0,5);
+  const [fh, fm] = firstIn.split(":").map(Number);
+  const [lh, lm] = lastOut.split(":").map(Number);
+  const hours = Math.round(((lh * 60 + lm) - (fh * 60 + fm)) / 60 * 100) / 100;
+
+  return { firstIn, lastOut, hours, totalPunches, modePunches };
+}
+// Returns {cls, tooltip} for login status colouring on First In time
+function getLoginStatus(timeStr) {
+  if (!timeStr || timeStr === "—") return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  const mins = h * 60 + m;
+  if (mins < 9 * 60 + 30)  return { color: "var(--green)",   tooltip: "Early Login" };
+  if (mins <= 9 * 60 + 45) return { color: "#4a9eff",         tooltip: "On Time" };
+  return                           { color: "var(--amber)",   tooltip: "Late Login" };
+}
+function getExpectedHours(dateStr) {
+  if (!dateStr) return 8;
+  const day = new Date(dateStr + "T00:00:00").getDay();
+  return day === 6 ? 4 : 8;
+}
+
+function statusBadgeForDate(hoursNum, dateStr) {
+  const full = getExpectedHours(dateStr);
+  const half = full / 2;
+  if (hoursNum >= full) return ["badge-full", "Full day"];
+  if (hoursNum >= half) return ["badge-half", "Half day"];
+  return ["badge-short", "Short"];
+}
+
+/* ── Main table render ── */
+function render(){
+  const search   = document.getElementById("search").value.toLowerCase().trim();
+  const dateFrom = document.getElementById("dateFrom").value;
+  const dateTo   = document.getElementById("dateTo").value;
+  const sortBy   = document.getElementById("sortBy").value;
+
+  let data = currentData().filter(r=>{
+    const name = (r.Name||"").toLowerCase();
+    const uid  = (r["User ID"]||r["Employee No"]||"").toString().toLowerCase().trim();
+    const date = (r.Date||"").toString().slice(0,10);
+    if(search && !name.includes(search) && !uid.includes(search)) return false;
+    if(dateFrom && date<dateFrom) return false;
+    if(dateTo   && date>dateTo)   return false;
+    return true;
+  });
+
+  // Enrich each record with cross-mode times before sorting
+  const enriched = data.map(r => {
+    const date = (r.Date||"").toString().slice(0,10);
+    const times = getCrossModeTimes(r.Name, date, currentMode);
+    return { ...r, _firstIn: times.firstIn, _lastOut: times.lastOut, _hours: times.hours,
+             _totalPunches: times.totalPunches, _modePunches: times.modePunches };
+  });
+
+  enriched.sort((a,b)=>{
+    const da=(a.Date||"").toString(), db=(b.Date||"").toString();
+    if(sortBy==="date_desc")  return db.localeCompare(da);
+    if(sortBy==="date_asc")   return da.localeCompare(db);
+    if(sortBy==="hours_desc"){const na=a._hours==="—"?0:Number(a._hours),nb=b._hours==="—"?0:Number(b._hours);return nb-na;}
+    if(sortBy==="hours_asc"){const na=a._hours==="—"?0:Number(a._hours),nb=b._hours==="—"?0:Number(b._hours);return na-nb;}
+    return db.localeCompare(da);
+  });
+
+  const total=currentData().length, shown=enriched.length;
+  const fmt=n=>n.toLocaleString("en-IN");
+
+document.getElementById("count-pill").textContent=
+shown===total
+?`${fmt(total)} records`
+:`${fmt(shown)} of ${fmt(total)}`;
+  document.getElementById("foot-left").textContent=`${shown} record${shown!==1?"s":""} · click any row for punch details`;
+
+  const tbody=document.getElementById("tbody");
+  if(!enriched.length){
+    tbody.innerHTML=`<tr><td colspan="9"><div class="no-data">No records match your filters<small>Try adjusting the date range or search term</small></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML=enriched.map((r,i)=>{
+    const hours = r._hours;
+    const hoursNum = (hours === "—" || hours === undefined) ? 0 : Number(hours);
+    const [cls,label]=statusBadgeForDate(hoursNum, (r.Date||"").toString().slice(0,10));    const uid=r["User ID"]||r["Employee No"]||"";
+    const safeDate=(r.Date||"").toString().slice(0,10);
+    // Punch display: modePunches / totalPunches
+    const pnchHtml = `<span class="pnch-mode">${r._modePunches}</span><span class="pnch-sep">/</span><span class="pnch-total">${r._totalPunches}</span>`;
+    return`<tr onclick="openPanel('${(r.Name||"").replace(/'/g,"\\'")}','${safeDate}','${(uid).toString().replace(/'/g,"\\'")}')">
+      <td>${i+1}</td>
+      <td class="emp-id-col">${uid||"—"}</td>
+      <td><div class="emp">${r.Name||"—"}</div></td>
+      <td><div class="date-val">${formatDate(r.Date)}</div></td>
+      <td>${(()=>{const s=getLoginStatus(r._firstIn);return s?`<span style="color:${s.color};font-weight:600;cursor:default" title="${s.tooltip}">${r._firstIn}</span>`:`<span style="color:var(--muted)">—</span>`;})()}</td>
+      <td class="t-out">${r._lastOut}</td>
+      <td class="hrs">${hours === "—" ? "—" : formatHours(hours)}</td>
+      <td class="pnch">${pnchHtml}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+/* ── Panel open — scoped to a single day ── */
+function openPanel(name, date, uid){
+  panelContext = {name, date, uid};
+
+  const allForDay = punchData.filter(p => p.Name === name && (p.Date||"").slice(0,10) === date);
+  const totalPunches = allForDay.length;
+
+  const officialTimes = allForDay
+    .filter(p => p.Mode === "face" || p.Mode === "greathr")
+    .map(p => p.Time).sort();
+
+  const firstIn = officialTimes.length >= 2 ? officialTimes[0].slice(0,5) : officialTimes.length === 1 ? officialTimes[0].slice(0,5) : "—";
+  const lastOut = officialTimes.length >= 2 ? officialTimes[officialTimes.length - 1].slice(0,5) : "—";
+
+  document.getElementById("panel-name").textContent=name;
+  document.getElementById("panel-id").textContent=uid?"Employee ID: #"+uid:"";
+  document.getElementById("pe-name").textContent=name;
+  document.getElementById("pe-id").textContent=uid?"#"+uid:"No ID on record";
+  document.getElementById("panel-day-label").textContent="📅 "+formatDateLong(date);
+
+  // Which modes recorded this person on this day
+  const modes=[];
+  if(faceData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-face">👤 Face</span>`);
+  if(fpData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))    modes.push(`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`);
+  if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
+  document.getElementById("pe-modes").innerHTML=modes.join("");
+
+  document.getElementById("ps-firstin").textContent  = firstIn;
+  document.getElementById("ps-lastout").textContent  = lastOut;
+  document.getElementById("ps-punches").textContent  = totalPunches;
+
+  renderPunchTable();
+
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("panel").classList.add("open");
+}
+
+/* ── Punch table — only for the selected day ── */
+function renderPunchTable(){
+  if(!panelContext) return;
+  const {name, date} = panelContext;
+
+  let rows = punchData.filter(p=>{
+    if(p.Name !== name) return false;
+    if((p.Date||"").slice(0,10) !== date) return false;
+    return true;
+  });
+
+  rows.sort((a,b)=>a.Time.localeCompare(b.Time));
+
+  document.getElementById("punch-foot").textContent=`${rows.length} punch event${rows.length!==1?"s":""} on this day`;
+  const tbody=document.getElementById("punch-tbody");
+
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--muted)">No punch events found for this date</td></tr>`;
+    return;
+  }
+
+  const total=rows.length;
+  tbody.innerHTML=rows.map((p,j)=>{
+    const isIn  = j===0;
+    const isOut = j===total-1 && total>1;
+    const label = isIn?"🟢 In":isOut?"🔴 Out":`⚪ #${j+1}`;
+    const tc    = isIn?"punch-in":isOut?"punch-out":"";
+    const mp    = p.Mode==="face"
+      ?`<span class="mode-pill mode-face">👤 Face</span>`
+      :p.Mode==="fingerprint"
+      ?`<span class="mode-pill mode-fp">🖐 FP</span>`
+      :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
+    return`<tr>
+      <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
+      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+      <td style="font-size:13px">${label}</td>
+      <td>${mp}</td>
+      <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
+    </tr>`;
+  }).join("");
+}
+
+function closePanel(){
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("panel").classList.remove("open");
+}
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closePanel();});
+
+function clearFilters(){
+  document.getElementById("search").value="";
+  document.getElementById("dateFrom").value="";
+  document.getElementById("dateTo").value="";
+  document.getElementById("sortBy").value="date_desc";
+  render();
+}
+</script>
+</body>
+</html>
+
+
+
+

@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Reports — Attendance</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--accent:#6c63ff;--accent2:#ff6584;--green:#00c9a7;--amber:#ffb347;--purple:#7c3aed;--card-r:14px;}
+[data-theme="dark"]{--bg:#0f1117;--surface:#1a1d27;--border:#2a2d3a;--text:#e8eaf0;--muted:#6b7280;--row-hover:rgba(108,99,255,.06);--input-bg:#1a1d27;--th-bg:#13151f;--foot-bg:#13151f;--pill-bg:rgba(108,99,255,.15);--pill-txt:#a89fff;--panel-bg:#13151f;--overlay:rgba(0,0,0,.55);}
+[data-theme="light"]{--bg:#f3f4f8;--surface:#ffffff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--row-hover:#f5f8ff;--input-bg:#f9fafb;--th-bg:#f9fafb;--foot-bg:#f9fafb;--pill-bg:#eff6ff;--pill-txt:#1d4ed8;--panel-bg:#ffffff;--overlay:rgba(0,0,0,.3);}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;transition:background .25s,color .25s;}
+
+/* Header */
+.header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 36px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;transition:background .25s,border-color .25s;}
+.header-left{display:flex;align-items:center;gap:16px;}
+.btn-back{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;text-decoration:none;}
+.btn-back:hover{border-color:var(--accent);color:var(--text);}
+.header-title h1{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.header-title p{color:var(--muted);font-size:13px;margin-top:3px;}
+.toggle-wrap{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
+.toggle{position:relative;width:44px;height:24px;cursor:pointer;}
+.toggle input{display:none;}
+.track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s;}
+.toggle input:checked~.track{background:var(--accent);}
+.thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s;}
+.toggle input:checked~.thumb{left:23px;}
+
+/* Mode tabs */
+.tabs{display:flex;gap:0;padding:20px 36px 0;}
+.tab{padding:10px 24px;font-size:14px;font-weight:500;border:1px solid var(--border);cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s;}
+.tab:first-child{border-radius:8px 0 0 8px;}
+.tab:last-child{border-radius:0 8px 8px 0;}
+.tab:not(:first-child){border-left:none;}
+.tab.active-all{background:#6c63ff;color:#fff;border-color:#6c63ff;}
+.tab.active-face{background:#6c63ff;color:#fff;border-color:#6c63ff;}
+.tab.active-fingerprint{background:#00c9a7;color:#fff;border-color:#00c9a7;}
+.tab.active-greathr{background:#7c3aed;color:#fff;border-color:#7c3aed;}
+.tab:not([class*="active"]):hover{color:var(--text);}
+
+/* Filter panel */
+.filter-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);margin:20px 36px 0;padding:22px 24px;}
+.filter-panel h2{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.filter-panel h2 span{width:8px;height:8px;border-radius:50%;background:var(--accent);display:inline-block;}
+.filter-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:14px;}
+.filter-group{display:flex;flex-direction:column;gap:5px;}
+.filter-group label{font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
+.filter-group input,
+.filter-group select{height:38px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:0 12px;border-radius:8px;font-size:14px;outline:none;font-family:'Inter',sans-serif;transition:border-color .15s,background .25s;}
+.filter-group input:focus,.filter-group select:focus{border-color:var(--accent);}
+.filter-group input::placeholder{color:var(--muted);}
+.filter-group select option{background:var(--surface);}
+[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1);}
+input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;}
+
+/* Report description */
+.report-desc{margin-top:14px;padding:10px 14px;background:rgba(108,99,255,.07);border:1px solid rgba(108,99,255,.2);border-radius:8px;font-size:13px;color:var(--muted);line-height:1.5;display:flex;align-items:center;gap:8px;}
+.report-desc.placeholder{background:rgba(255,255,255,.03);border-color:var(--border);font-style:italic;}
+.report-desc-icon{font-size:15px;flex-shrink:0;}
+[data-theme="light"] .report-desc{background:rgba(108,99,255,.05);border-color:rgba(108,99,255,.15);}
+[data-theme="light"] .report-desc.placeholder{background:rgba(0,0,0,.02);border-color:var(--border);}
+
+/* Threshold row */
+.threshold-row{margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.threshold-row label{font-size:13px;color:var(--muted);font-weight:500;}
+.threshold-row input{height:38px;width:90px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:0 12px;border-radius:8px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.threshold-row input:focus{border-color:var(--accent);}
+.threshold-row span{font-size:13px;color:var(--muted);}
+.threshold-row select{height:38px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:0 12px;border-radius:8px;font-size:14px;outline:none;font-family:'Inter',sans-serif;}
+.threshold-row select:focus{border-color:var(--accent);}
+
+/* Action buttons */
+.action-row{display:flex;gap:12px;margin-top:20px;align-items:center;flex-wrap:wrap;}
+.btn-generate{height:42px;padding:0 28px;background:var(--accent);border:none;color:#fff;border-radius:8px;font-size:14px;font-weight:600;font-family:'Inter',sans-serif;cursor:pointer;transition:opacity .15s;}
+.btn-generate:hover{opacity:.88;}
+.btn-generate:disabled{opacity:.38;cursor:not-allowed;}
+.btn-export{height:42px;padding:0 20px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;display:none;}
+.btn-export:hover{border-color:var(--green);color:var(--green);}
+.btn-clear{height:42px;padding:0 16px;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;}
+.btn-clear:hover{border-color:var(--accent);color:var(--text);}
+.report-type-select{height:42px;padding:0 12px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);border-radius:8px;font-size:14px;font-family:'Inter',sans-serif;outline:none;min-width:240px;cursor:pointer;}
+.report-type-select:focus{border-color:var(--accent);}
+.report-type-select option{background:var(--surface);color:var(--text);padding:10px;font-weight:500;}
+.report-type-select optgroup{background:var(--surface);color:var(--text);font-weight:700;}
+.report-type-select.unselected{color:var(--muted);}
+
+/* Results */
+.results-section{margin:20px 36px 40px;}
+
+/* ── Report info header ── */
+.report-info-header{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);padding:18px 22px;margin-bottom:16px;}
+.rih-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.rih-title{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;}
+.rih-ts{font-size:12px;color:var(--muted);margin-top:3px;}
+.rih-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+.rih-tag{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:4px;background:var(--th-bg);border:1px solid var(--border);font-size:12px;color:var(--muted);}
+.rih-tag strong{color:var(--text);font-weight:600;}
+
+/* ── Export action buttons ── */
+.export-action-row{display:flex;gap:8px;flex-wrap:wrap;}
+.btn-exp{height:34px;padding:0 14px;border-radius:7px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:12px;font-weight:500;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.btn-exp:hover{color:var(--text);border-color:var(--muted);}
+.btn-exp.excel:hover{border-color:var(--green);color:var(--green);}
+.btn-exp.csv:hover{border-color:var(--amber);color:var(--amber);}
+.btn-exp.print:hover{border-color:var(--accent);color:var(--accent);}
+
+/* ── Summary cards ── */
+.summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:12px;margin-bottom:16px;}
+.s-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);padding:14px 16px;position:relative;overflow:hidden;transition:background .25s,border-color .25s,transform .18s ease,box-shadow .18s ease;}
+.s-card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.15);}
+.s-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--c,var(--accent));}
+.s-card .sc-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.s-card .sc-val{font-size:26px;font-weight:700;margin-top:6px;color:var(--c,var(--accent));font-family:'Space Grotesk',sans-serif;line-height:1;}
+.s-card .sc-sub{font-size:11px;color:var(--muted);margin-top:4px;}
+
+/* Results header */
+.results-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;}
+.results-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;}
+.results-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+.results-controls input,.results-controls select{height:36px;background:var(--input-bg);border:1px solid var(--border);color:var(--text);padding:0 12px;border-radius:8px;font-size:13px;outline:none;font-family:'Inter',sans-serif;}
+.results-controls input:focus,.results-controls select:focus{border-color:var(--accent);}
+.results-controls input::placeholder{color:var(--muted);}
+.count-pill{font-size:13px;color:var(--pill-txt);background:var(--pill-bg);padding:4px 14px;border-radius:20px;font-weight:500;white-space:nowrap;}
+
+/* Table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);overflow:hidden;}
+table{width:100%;border-collapse:collapse;}
+thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
+thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;cursor:pointer;user-select:none;}
+thead th:hover{color:var(--text);}
+thead th.sorted{color:var(--accent);}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
+tbody tr:last-child{border-bottom:none;}
+tbody tr:hover{background:var(--row-hover);}
+tbody td{padding:12px 16px;font-size:14px;vertical-align:middle;}
+.emp-name{font-weight:600;transition:color .15s;}
+tbody tr:hover .emp-name{color:var(--accent);}
+.t-in{color:var(--green);font-weight:600;}
+.t-out{color:var(--accent2);font-weight:600;}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:4px;font-size:11px;font-weight:600;transition:transform .18s ease;}
+tbody tr:hover .badge{transform:translateY(-1px);}
+.badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0;}
+.badge-full{background:rgba(0,201,167,.12);color:var(--green);}.badge-full::before{background:var(--green);}
+.badge-half{background:rgba(255,179,71,.12);color:var(--amber);}.badge-half::before{background:var(--amber);}
+.badge-short{background:rgba(255,101,132,.12);color:var(--accent2);}.badge-short::before{background:var(--accent2);}
+.mode-pill{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;}
+.mode-face{background:rgba(108,99,255,.15);color:#a89fff;}
+.mode-fp{background:rgba(0,201,167,.15);color:var(--green);}
+.mode-ghr{background:rgba(124,58,237,.15);color:#c084fc;}
+.mode-all{background:rgba(255,179,71,.15);color:var(--amber);}
+.tfoot-row{padding:10px 16px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:13px;color:var(--muted);}
+
+/* ── Better empty state ── */
+.empty-state{text-align:center;padding:56px 36px;}
+.empty-state .es-icon{font-size:42px;margin-bottom:16px;opacity:.6;}
+.empty-state .es-title{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;color:var(--text);margin-bottom:8px;}
+.empty-state .es-sub{font-size:14px;color:var(--muted);margin-bottom:20px;}
+.empty-state .es-tips{display:inline-flex;flex-direction:column;gap:7px;text-align:left;}
+.empty-state .es-tip{font-size:13px;color:var(--muted);display:flex;align-items:center;gap:7px;}
+.empty-state .es-tip::before{content:'';width:4px;height:4px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+
+.idle-hint{text-align:center;padding:60px 36px;color:var(--muted);font-size:14px;}
+
+/* Print styles */
+@media print {
+  .header,.tabs,.filter-panel,.action-row,.results-controls,.export-action-row,.btn-exp{display:none!important;}
+  body{background:#fff;color:#000;}
+  .results-section{margin:0;}
+  .report-info-header,.summary-cards,.table-wrap{border:1px solid #ddd;}
+  .s-card{border:1px solid #ddd;}
+  [data-theme="dark"] .rih-tag,[data-theme="dark"] .s-card,[data-theme="dark"] .report-info-header,[data-theme="dark"] .table-wrap{background:#fff;color:#000;border-color:#ddd;}
+  [data-theme="dark"] thead tr{background:#f5f5f5;}
+  [data-theme="dark"] tbody tr:nth-child(even){background:#fafafa;}
+  [data-theme="dark"] .s-card .sc-val,[data-theme="dark"] .rih-title{color:#111;}
+  [data-theme="dark"] .sc-label,[data-theme="dark"] .rih-ts,[data-theme="dark"] .rih-tag,[data-theme="dark"] .tfoot-row{color:#555;}
+}
+
+/* ── Panel ── */
+.overlay{display:none;position:fixed;inset:0;background:var(--overlay);z-index:100;}
+.overlay.open{display:block;}
+.panel{position:fixed;top:0;right:-580px;width:560px;height:100vh;background:var(--panel-bg);border-left:1px solid var(--border);z-index:101;overflow-y:auto;transition:right .3s cubic-bezier(.4,0,.2,1);display:flex;flex-direction:column;}
+.panel.open{right:0;}
+.panel-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;position:sticky;top:0;background:var(--panel-bg);z-index:1;}
+.panel-header h2{font-family:'Space Grotesk',sans-serif;font-size:17px;font-weight:700;}
+.ph-sub{font-size:13px;color:var(--muted);margin-top:3px;}
+.btn-close{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;line-height:1;flex-shrink:0;margin-left:12px;}
+.btn-close:hover{color:var(--text);border-color:var(--muted);}
+.panel-body{padding:20px 24px;flex:1;}
+.panel-emp-header{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px 18px;margin-bottom:14px;}
+.panel-emp-name{font-family:'Space Grotesk',sans-serif;font-size:18px;font-weight:700;}
+.panel-emp-id{font-size:13px;color:var(--muted);margin-top:3px;}
+.panel-mode-pills{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.mode-pill-panel{display:inline-block;padding:3px 10px;border-radius:4px;font-size:12px;font-weight:600;}
+.panel-stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;}
+.panel-stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px;text-align:center;}
+.ps-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;}
+.ps-val{font-size:20px;font-weight:700;margin-top:5px;}
+.panel-section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.panel-day-label{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;color:var(--text);margin-bottom:14px;padding:10px 14px;background:var(--surface);border:1px solid var(--border);border-radius:8px;}
+.panel-table-wrap{border:1px solid var(--border);border-radius:10px;overflow:hidden;}
+.panel-table{width:100%;border-collapse:collapse;font-size:13px;}
+.panel-table thead tr{background:var(--th-bg);border-bottom:1px solid var(--border);}
+.panel-table thead th{padding:10px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;}
+.panel-table tbody tr{border-bottom:1px solid var(--border);}
+.panel-table tbody tr:last-child{border-bottom:none;}
+.panel-table tbody tr:hover{background:var(--row-hover);}
+.panel-table tbody td{padding:10px 12px;}
+.panel-foot{padding:8px 12px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:12px;color:var(--muted);}
+.punch-in{color:var(--green);font-weight:600;}
+.punch-out{color:var(--accent2);font-weight:600;}
+
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <a class="btn-back" href="index.html">← Back</a>
+    <div class="header-title">
+      <h1>Reports</h1>
+      <p>Generate HR attendance reports across all modes</p>
+    </div>
+  </div>
+  <div class="toggle-wrap">
+    <span>☀️</span>
+    <label class="toggle">
+      <input type="checkbox" id="themeToggle" checked onchange="toggleTheme()">
+      <div class="track"></div>
+      <div class="thumb"></div>
+    </label>
+    <span>🌙</span>
+  </div>
+</div>
+
+<!-- Mode tabs -->
+<div class="tabs">
+  <div class="tab active-all" id="tab-all"         onclick="switchMode('all')">🔀 All</div>
+  <div class="tab"            id="tab-face"        onclick="switchMode('face')">👤 Face</div>
+  <div class="tab"            id="tab-fingerprint" onclick="switchMode('fingerprint')">🖐 Fingerprint</div>
+  <div class="tab"            id="tab-greathr"     onclick="switchMode('greathr')">📱 Great HR</div>
+</div>
+
+<!-- Filter panel -->
+<div class="filter-panel">
+  <h2><span></span>Report Configuration</h2>
+
+  <div class="filter-grid">
+    <div class="filter-group" style="grid-column:span 2">
+      <label>Report Type</label>
+      <select id="reportType" class="report-type-select unselected" onchange="onReportTypeChange()" style="height:38px;max-width:100%;">
+        <option value="" disabled selected>Select report…</option>
+        <optgroup label="Attendance">
+          <option value="summary">Attendance Summary</option>
+        </optgroup>
+        <optgroup label="Time">
+          <option value="early_login">Early Login</option>
+          <option value="late_login">Late Login</option>
+          <option value="insufficient_hours">Insufficient Hours</option>
+          <option value="overtime">Overtime</option>
+        </optgroup>
+        <optgroup label="Exceptions">
+          <option value="single_punch">Single Punch</option>
+          <option value="fp_without_face">Fingerprint Without Face/Great HR</option>
+          <option value="face_without_fp">Face/Great HR Without Fingerprint</option>
+          <option value="duplicate_punch">Duplicate Punch</option>
+          <option value="multiple_punch">Multiple Punch</option>
+        </optgroup>
+        <optgroup label="Analytics">
+          <option value="attendance_pattern">Attendance Pattern</option>
+          <option value="source_comparison">Attendance Source Comparison</option>
+        </optgroup>
+      </select>
+    </div>
+
+    <div class="filter-group">
+      <label>Employee ID</label>
+      <input type="text" id="fEmpId" placeholder="e.g. 054">
+    </div>
+    <div class="filter-group">
+      <label>Employee Name</label>
+      <input type="text" id="fEmpName" placeholder="Search name…">
+    </div>
+    <div class="filter-group">
+      <label>From Date</label>
+      <input type="date" id="fDateFrom">
+    </div>
+    <div class="filter-group">
+      <label>To Date</label>
+      <input type="date" id="fDateTo">
+    </div>
+  </div>
+
+  <!-- Report description -->
+  <div class="report-desc placeholder" id="reportDesc">
+    <span class="report-desc-icon">💡</span>
+    <span id="reportDescText">Select a report above to see its description.</span>
+  </div>
+
+  <!-- Threshold row -->
+  <div class="threshold-row" id="thresholdRow" style="display:none;">
+    <label id="thresholdLabel">Threshold Time</label>
+    <input type="time" id="thresholdTime" value="09:00">
+    <input type="number" id="thresholdHours" value="8" min="0" max="24" step="0.5" style="display:none;">
+    <input type="number" id="thresholdSeconds" value="30" min="1" max="3600" step="1" style="display:none;">
+    <input type="number" id="thresholdPunches" value="8" min="1" max="100" step="1" style="display:none;">
+    <span id="thresholdUnit">AM</span>
+  </div>
+
+  <div class="action-row">
+    <button class="btn-generate" id="btnGenerate" onclick="generateReport()" disabled>⚡ Generate Report</button>
+    <button class="btn-export" id="btnExport" onclick="exportCSV()">⬇ Export CSV</button>
+    <button class="btn-clear" onclick="clearAll()">✕ Clear</button>
+  </div>
+</div>
+
+<!-- Results -->
+<div class="results-section" id="resultsSection" style="display:none;">
+
+  <!-- Report info header -->
+  <div class="report-info-header" id="reportInfoHeader">
+    <div class="rih-top">
+      <div>
+        <div class="rih-title" id="rihTitle">—</div>
+        <div class="rih-ts" id="rihTs">—</div>
+      </div>
+      <div class="export-action-row">
+        <button class="btn-exp excel" onclick="exportExcel()">📊 Excel</button>
+        <button class="btn-exp csv"   onclick="exportCSV()">📄 CSV</button>
+        <button class="btn-exp print" onclick="printReport()">🖨 Print</button>
+      </div>
+    </div>
+    <div class="rih-meta" id="rihMeta"></div>
+  </div>
+
+  <!-- Summary cards -->
+  <div class="summary-cards" id="summaryCards"></div>
+
+  <div class="results-header">
+    <div class="results-title" id="resultsTitle">Report Results</div>
+    <div class="results-controls">
+      <input type="text" id="resSearch" placeholder="🔍 Filter results…" oninput="filterResults()">
+      <select id="resSort" onchange="filterResults()">
+        <option value="default">Default Order</option>
+        <option value="date_desc">Date Newest</option>
+        <option value="date_asc">Date Oldest</option>
+        <option value="hours_desc">Hours Highest</option>
+        <option value="hours_asc">Hours Lowest</option>
+      </select>
+      <span style="font-size:13px;color:var(--muted);font-weight:500;">Top</span>
+      <input type="number" id="rankTop" placeholder="All" min="0" step="1" style="width:72px;" oninput="filterResults()">
+      <span class="count-pill" id="resCount">—</span>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead id="resHead"></thead>
+      <tbody id="resTbody"></tbody>
+    </table>
+    <div class="tfoot-row" id="resFoot">—</div>
+  </div>
+</div>
+
+<div class="idle-hint" id="idleHint">Configure report settings above and click <strong>Generate Report</strong></div>
+
+<script>
+/* ── Data ── */
+let faceData=[], fpData=[], ghrData=[];
+let currentMode="all";
+let reportRows=[];
+let filteredRows=[];
+let currentReportType="";
+
+/* ── Report descriptions ── */
+const REPORT_DESC={
+  summary:            "Overall attendance, hours and punch statistics per employee.",
+  early_login:        "Employees whose first punch is before the configured login time.",
+  late_login:         "Employees whose first punch is after the configured login time.",
+  overtime:           "Employees who worked more than the required hours (Mon–Fri: 8h, Sat: 4h) on a given day.",
+  insufficient_hours: "Employees who worked fewer than the required hours (Mon–Fri: 8h, Sat: 4h) on a given day.",
+  single_punch:       "Days where only a single punch was recorded — likely a missing check-in or check-out.",
+  fp_without_face:    "Employees with Fingerprint punches but no Face/Great HR punch on the same day.",
+  face_without_fp:    "Employees with Face/Great HR punches but no Fingerprint punch on the same day.",
+  duplicate_punch:    "Detects consecutive punches within a configurable short interval — likely accidental double-taps.",
+  multiple_punch:     "Employees with more than the configured number of punches in a single day.",
+  attendance_pattern: "Per-employee summary showing average login, logout, hours and punches across the selected period.",
+  source_comparison:  "Side-by-side breakdown of attendance days recorded across Face, Fingerprint and Great HR sources.",
+};
+
+/* ── Theme ── */
+function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
+const st=localStorage.getItem("attendance-theme");
+if(st){document.documentElement.setAttribute("data-theme",st);document.getElementById("themeToggle").checked=st==="dark";}
+
+/* ── Load data ── */
+let punchData=[];
+Promise.all([
+  fetch("face_summary.json").then(r=>r.json()),
+  fetch("fingerprint_summary.json").then(r=>r.json()),
+  fetch("greathr_summary.json").then(r=>r.json()),
+  fetch("punch_details.json").then(r=>r.json()),
+]).then(([f,fp,g,pd])=>{faceData=f;fpData=fp;ghrData=g;punchData=pd;})
+  .catch(()=>document.getElementById("idleHint").innerHTML="⚠ Could not load JSON files. Run python attendance.py first.");
+/* ── Mode tabs ── */
+function switchMode(m){
+  currentMode=m;
+  ["all","face","fingerprint","greathr"].forEach(x=>{
+    document.getElementById("tab-"+x).className="tab"+(x===m?" active-"+m:"");
+  });
+}
+
+/* ── Report type change ── */
+function onReportTypeChange(){
+  const t=document.getElementById("reportType").value;
+  const sel=document.getElementById("reportType");
+  const row=document.getElementById("thresholdRow");
+  const tTime=document.getElementById("thresholdTime");
+  const tHours=document.getElementById("thresholdHours");
+  const tSeconds=document.getElementById("thresholdSeconds");
+  const tPunches=document.getElementById("thresholdPunches");
+  const tLabel=document.getElementById("thresholdLabel");
+  const tUnit=document.getElementById("thresholdUnit");
+  const desc=document.getElementById("reportDesc");
+  const descText=document.getElementById("reportDescText");
+  const btnGenerate=document.getElementById("btnGenerate");
+
+  // Hide all threshold controls first
+  [tTime,tHours,tSeconds,tPunches].forEach(el=>el.style.display="none");
+  tUnit.textContent="";
+
+  if(!t){
+    sel.classList.add("unselected");
+    btnGenerate.disabled=true;
+    desc.classList.add("placeholder");
+    descText.textContent="Select a report above to see its description.";
+    desc.querySelector(".report-desc-icon").textContent="💡";
+    row.style.display="none";
+    return;
+  }
+
+  sel.classList.remove("unselected");
+  btnGenerate.disabled=false;
+  desc.classList.remove("placeholder");
+  descText.textContent=REPORT_DESC[t]||"";
+  desc.querySelector(".report-desc-icon").textContent="ℹ️";
+
+  const timeReports=["early_login","late_login"];
+  const hourReports=["overtime","insufficient_hours"];
+
+  if(timeReports.includes(t)){
+    row.style.display="flex";
+    tTime.style.display="";
+    tTime.value = t==="late_login" ? "09:45" : "09:30";
+    tLabel.textContent=t==="late_login"?"After time":"Before time";
+  }else if(hourReports.includes(t)){
+    row.style.display="flex";
+    tHours.style.display="";
+    tLabel.textContent=t==="overtime"?"More than":"Less than";
+    tUnit.textContent="hours";
+  }else if(t==="duplicate_punch"){
+    row.style.display="flex";
+    tSeconds.style.display="";
+    tLabel.textContent="Within";
+    tUnit.textContent="seconds";
+  }else if(t==="multiple_punch"){
+    row.style.display="flex";
+    tPunches.style.display="";
+    tLabel.textContent="More than";
+    tUnit.textContent="punches";
+  }else{
+    row.style.display="none";
+  }
+}
+
+/* ── Helpers ── */
+function getSourceData(){
+  if(currentMode==="face")        return faceData.map(r=>({...r,_mode:"face"}));
+  if(currentMode==="fingerprint") return fpData.map(r=>({...r,_mode:"fingerprint"}));
+  if(currentMode==="greathr")     return ghrData.map(r=>({...r,_mode:"greathr"}));
+  return[
+    ...faceData.map(r=>({...r,_mode:"face"})),
+    ...fpData.map(r=>({...r,_mode:"fingerprint"})),
+    ...ghrData.map(r=>({...r,_mode:"greathr"}))
+  ];
+}
+
+function applyBaseFilters(rows){
+  const eid   =document.getElementById("fEmpId").value.trim().toLowerCase();
+  const ename =document.getElementById("fEmpName").value.trim().toLowerCase();
+  const dfrom =document.getElementById("fDateFrom").value;
+  const dto   =document.getElementById("fDateTo").value;
+  return rows.filter(r=>{
+    const id  =(r["User ID"]||r["Employee No"]||"").toString().toLowerCase();
+    const name=(r.Name||"").toLowerCase();
+    const date=(r.Date||"").toString().slice(0,10);
+    if(eid   &&!id.includes(eid))     return false;
+    if(ename &&!name.includes(ename)) return false;
+    if(dfrom && date<dfrom)           return false;
+    if(dto   && date>dto)             return false;
+    return true;
+  });
+}
+
+function timeToMins(t){if(!t)return null;const[h,m]=t.split(":").map(Number);return h*60+m;}
+function formatDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});}
+function formatDateShort(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});}
+
+function modePill(m){
+  if(m==="face")        return`<span class="mode-pill mode-face">👤 Face</span>`;
+  if(m==="fingerprint") return`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`;
+  if(m==="greathr")     return`<span class="mode-pill mode-ghr">📱 Great HR</span>`;
+  return`<span class="mode-pill mode-all">${m}</span>`;
+}
+
+function statusBadge(h, dateStr) {
+  return statusBadgeForDate(h, dateStr);
+}
+
+function modeLabel(m){
+  if(m==="face")return"👤 Face";
+  if(m==="fingerprint")return"🖐 Fingerprint";
+  if(m==="greathr")return"📱 Great HR";
+  return"🔀 All Sources";
+}
+
+/* Convert "09:15 AM" / "09:15" punch time string to total minutes from midnight */
+function punchTimeToMins(t){
+  if(!t||t==="—")return null;
+  const str=t.trim();
+  const [timePart,period]=(str+" ").trim().split(" ");
+  const parts=timePart.split(":");
+  let h=parseInt(parts[0],10);
+  const m=parseInt(parts[1]||"0",10);
+  if(period&&period.toUpperCase()==="PM"&&h!==12)h+=12;
+  if(period&&period.toUpperCase()==="AM"&&h===12)h=0;
+  return h*60+m;
+}
+
+/* Format minutes as HH:MM */
+function minsToTime(mins){
+  if(mins===null||isNaN(mins))return"—";
+  const h=Math.floor(mins/60)%24;
+  const m=Math.round(mins%60);
+  return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+}
+/* Returns expected full-day hours for a given date string (YYYY-MM-DD).
+   Saturday: 4h (09:30–13:30). All other days: 8h. */
+function getExpectedHours(dateStr) {
+  if (!dateStr) return 8;
+  const day = new Date(dateStr + "T00:00:00").getDay(); // 0=Sun,6=Sat
+  return day === 6 ? 4 : 8;
+}
+
+/* Status badge that respects Saturday hours */
+function statusBadgeForDate(hours, dateStr) {
+  const full = getExpectedHours(dateStr);
+  const half = full / 2;
+  if (hours >= full) return `<span class="badge badge-full">Full day</span>`;
+  if (hours >= half) return `<span class="badge badge-half">Half day</span>`;
+  return `<span class="badge badge-short">Short</span>`;
+}
+
+/* Official First In, Last Out, Hours for a name+date (Face + Great HR only, ≥2 rule) */
+function getOfficialTimes(name, date) {
+  const officialTimes = punchData
+    .filter(p => p.Name === name && (p.Date||"").slice(0,10) === date
+              && (p.Mode === "face" || p.Mode === "greathr"))
+    .map(p => p.Time).sort();
+  if (officialTimes.length === 0) return { firstIn:"—", lastOut:"—", hours:"—" };
+  if (officialTimes.length === 1) return { firstIn: officialTimes[0].slice(0,5), lastOut:"—", hours:"—" };
+  const firstIn = officialTimes[0].slice(0,5);
+  const lastOut = officialTimes[officialTimes.length-1].slice(0,5);
+  const [fh,fm] = firstIn.split(":").map(Number);
+  const [lh,lm] = lastOut.split(":").map(Number);
+  const hours = Math.round(((lh*60+lm)-(fh*60+fm))/60*100)/100;
+  return { firstIn, lastOut, hours };
+}
+
+function getTotalPunches(name, date) {
+  return punchData.filter(p => p.Name === name && (p.Date||"").slice(0,10) === date).length;
+}
+
+function getLoginStatus(timeStr) {
+  if (!timeStr || timeStr === "—") return null;
+  const [h, m] = timeStr.split(":").map(Number);
+  const mins = h * 60 + m;
+  if (mins < 9 * 60 + 30)  return { color: "var(--green)", tooltip: "Early Login" };
+  if (mins <= 9 * 60 + 45) return { color: "#4a9eff",      tooltip: "On Time" };
+  return                           { color: "var(--amber)", tooltip: "Late Login" };
+}
+
+/* ── Report info header ── */
+function renderReportInfoHeader(title){
+  const now=new Date();
+  const ts=now.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"})+" at "+now.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit"});
+  document.getElementById("rihTitle").textContent=title;
+  document.getElementById("rihTs").textContent="Generated on "+ts;
+
+  const dfrom=document.getElementById("fDateFrom").value;
+  const dto  =document.getElementById("fDateTo").value;
+  const eid  =document.getElementById("fEmpId").value.trim();
+  const ename=document.getElementById("fEmpName").value.trim();
+
+  const tags=[];
+  if(dfrom||dto){
+    const from=dfrom?formatDateShort(dfrom):"earliest";
+    const to  =dto  ?formatDateShort(dto)  :"latest";
+    tags.push(`<span class="rih-tag">📅 Date range: <strong>${from} → ${to}</strong></span>`);
+  }else{
+    tags.push(`<span class="rih-tag">📅 Date range: <strong>All dates</strong></span>`);
+  }
+  tags.push(`<span class="rih-tag">📡 Source: <strong>${modeLabel(currentMode)}</strong></span>`);
+  if(eid)  tags.push(`<span class="rih-tag">🔢 Employee ID: <strong>${eid}</strong></span>`);
+  if(ename)tags.push(`<span class="rih-tag">👤 Name filter: <strong>${ename}</strong></span>`);
+
+  document.getElementById("rihMeta").innerHTML=tags.join("");
+}
+
+/* ── Summary cards ── */
+function renderSummaryCards(type, rows){
+  const container=document.getElementById("summaryCards");
+  const cards=[];
+
+  if(type==="summary"){
+    const totalEmps=rows.length;
+    const totalDays=rows.reduce((s,r)=>s+r.days,0);
+    const avgH=totalDays?( rows.reduce((s,r)=>s+(parseFloat(r.avgH)||0)*r.days,0)/totalDays ).toFixed(1):"—";
+    const totalPunches=rows.reduce((s,r)=>s+r.punches,0);
+    cards.push({label:"Employees",val:totalEmps,sub:"unique",c:"var(--accent)"});
+    cards.push({label:"Total Day-Records",val:totalDays,sub:"across all sources",c:"#a89fff"});
+    cards.push({label:"Avg Hours / Day",val:avgH+"h",sub:"all employees",c:"var(--amber)"});
+    cards.push({label:"Total Punches",val:totalPunches,sub:"all sources",c:"var(--green)"});
+  }
+  else if(["early_login","late_login"].includes(type)){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const avgH=rows.length?(rows.reduce((s,r)=>s+(r.Hours||0),0)/rows.length).toFixed(1):"—";
+    const thresh=document.getElementById("thresholdTime").value||"—";
+    cards.push({label:"Records Found",val:rows.length,sub:"matching threshold",c:"var(--accent)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Avg Hours",val:avgH+"h",sub:"on flagged days",c:"var(--amber)"});
+    cards.push({label:"Threshold",val:thresh,sub:"configured time",c:"var(--green)"});
+  }
+  else if(["overtime","insufficient_hours"].includes(type)){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const avgH=rows.length?(rows.reduce((s,r)=>s+(r.Hours||0),0)/rows.length).toFixed(1):"—";
+    const extremeH=rows.length?(type==="overtime"?Math.max:Math.min)(...rows.map(r=>r.Hours||0)).toFixed(1):"—";
+    const satCount=rows.filter(r=>new Date((r.Date||"")+"T00:00:00").getDay()===6).length;
+    cards.push({label:"Records Found",val:rows.length,sub:"days",c:"var(--accent)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Avg Hours",val:avgH+"h",sub:"on flagged days",c:"var(--amber)"});
+    cards.push({label:type==="overtime"?"Max Hours":"Min Hours",val:extremeH+"h",sub:"single day",c:type==="overtime"?"var(--green)":"var(--accent2)"});
+    if(satCount>0) cards.push({label:"Saturday Records",val:satCount,sub:"4h full day threshold",c:"var(--purple)"});
+  }
+  else if(type==="single_punch"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const faceCount=rows.filter(r=>r._mode==="face").length;
+    const fpCount  =rows.filter(r=>r._mode==="fingerprint").length;
+    const ghrCount =rows.filter(r=>r._mode==="greathr").length;
+    cards.push({label:"Records Found",val:rows.length,sub:"days flagged",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Face",val:faceCount,sub:"records",c:"var(--accent)"});
+    cards.push({label:"Fingerprint + GHR",val:fpCount+ghrCount,sub:"records",c:"var(--green)"});
+  }
+  else if(type==="fp_without_face"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const totalDays=rows.length;
+    const fpOnly=rows.filter(r=>r._fpCount>0&&r._faceCount===0).length;
+    cards.push({label:"Records Found",val:totalDays,sub:"employee-days",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"FP Only Days",val:fpOnly,sub:"no face punch",c:"var(--amber)"});
+    cards.push({label:"Missing Face",val:empSet.size,sub:"employees affected",c:"var(--accent)"});
+  }
+  else if(type==="face_without_fp"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    cards.push({label:"Records Found",val:rows.length,sub:"employee-days",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Missing FP",val:empSet.size,sub:"employees affected",c:"var(--amber)"});
+    cards.push({label:"Face Only Days",val:rows.length,sub:"no fingerprint punch",c:"var(--accent)"});
+  }
+  else if(type==="duplicate_punch"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const thresh=document.getElementById("thresholdSeconds").value||"30";
+    cards.push({label:"Duplicate Pairs",val:rows.length,sub:"detected",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"affected",c:"#a89fff"});
+    cards.push({label:"Threshold",val:thresh+"s",sub:"interval used",c:"var(--amber)"});
+    const minDiff=rows.length?Math.min(...rows.map(r=>r._diffSecs)):"—";
+    cards.push({label:"Closest Pair",val:minDiff!=="—"?minDiff+"s":"—",sub:"seconds apart",c:"var(--accent)"});
+  }
+  else if(type==="multiple_punch"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const thresh=document.getElementById("thresholdPunches").value||"8";
+    const maxP=rows.length?Math.max(...rows.map(r=>r.Total_Punches||0)):"—";
+    cards.push({label:"Records Found",val:rows.length,sub:"days flagged",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Threshold",val:">"+thresh,sub:"punches per day",c:"var(--amber)"});
+    cards.push({label:"Max Punches",val:maxP,sub:"single day",c:"var(--green)"});
+  }
+  else if(type==="attendance_pattern"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const avgDays=(rows.reduce((s,r)=>s+r.days,0)/rows.length||0).toFixed(1);
+    const avgH=(rows.reduce((s,r)=>s+(parseFloat(r.avgHours)||0),0)/rows.length||0).toFixed(1);
+    cards.push({label:"Employees",val:empSet.size,sub:"analysed",c:"var(--accent)"});
+    cards.push({label:"Avg Working Days",val:avgDays,sub:"per employee",c:"#a89fff"});
+    cards.push({label:"Avg Hours / Day",val:avgH+"h",sub:"all employees",c:"var(--amber)"});
+    const avgLogin=rows.filter(r=>r.avgLoginMins!==null);
+    const meanLogin=avgLogin.length?minsToTime(avgLogin.reduce((s,r)=>s+r.avgLoginMins,0)/avgLogin.length):"—";
+    cards.push({label:"Avg Login Time",val:meanLogin,sub:"across employees",c:"var(--green)"});
+  }
+  else if(type==="source_comparison"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const totalFace=rows.reduce((s,r)=>s+r.faceDays,0);
+    const totalFP  =rows.reduce((s,r)=>s+r.fpDays,0);
+    const totalGHR =rows.reduce((s,r)=>s+r.ghrDays,0);
+    cards.push({label:"Employees",val:empSet.size,sub:"compared",c:"var(--accent)"});
+    cards.push({label:"Face Days",val:totalFace,sub:"total",c:"#a89fff"});
+    cards.push({label:"Fingerprint Days",val:totalFP,sub:"total",c:"var(--green)"});
+    cards.push({label:"Great HR Days",val:totalGHR,sub:"total",c:"var(--amber)"});
+  }
+
+  container.innerHTML=cards.map(c=>`
+    <div class="s-card" style="--c:${c.c}">
+      <div class="sc-label">${c.label}</div>
+      <div class="sc-val">${c.val}</div>
+      <div class="sc-sub">${c.sub}</div>
+    </div>`).join("");
+}
+
+/* ── Generate ── */
+function generateReport(){
+  const type=document.getElementById("reportType").value;
+  if(!type)return;
+  currentReportType=type;
+  let src=applyBaseFilters(getSourceData()).map(r=>{
+    const date=(r.Date||"").toString().slice(0,10);
+    const off=getOfficialTimes(r.Name, date);
+    return {
+      ...r,
+      First_In:  off.firstIn,
+      Last_Out:  off.lastOut,
+      Hours:     off.hours==="—" ? 0 : off.hours,
+      _officialHours: off.hours,
+      _totalPunches:  getTotalPunches(r.Name, date),
+    };
+  });
+  let rows=[];
+  let headHtml="";
+  let title="";
+
+  if(type==="summary"){
+    title="Attendance Summary";
+    const map={};
+    src.forEach(r=>{
+      const k=r.Name||"—";
+      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",face:0,fp:0,ghr:0,totalH:0,punches:0,days:new Set()};
+      const m=r._mode;
+      if(m==="face")map[k].face++;
+      else if(m==="fingerprint")map[k].fp++;
+      else if(m==="greathr")map[k].ghr++;
+      map[k].totalH+=r.Hours||0;
+      map[k].punches+=r.Total_Punches||0;
+      map[k].days.add(r.Date);
+    });
+    rows=Object.values(map).map(e=>({...e,days:e.days.size,avgH:e.days.size?(e.totalH/e.days.size).toFixed(1):"—"}));
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th><th>Avg Hours</th><th>Total Punches</th></tr>`;
+  }
+  else if(type==="early_login"||type==="late_login"){
+    title=type==="early_login"?"Early Login":"Late Login";
+    const thresh=document.getElementById("thresholdTime").value||"09:00";
+    const thMin=timeToMins(thresh);
+    rows=src.filter(r=>{
+      const fi=r.First_In||"";
+      if(!fi||fi==="—")return false;
+      const [timePart,period]=(fi+" ").trim().split(" ");
+      const [h,m]=timePart.split(":").map(Number);
+      let hh=h;
+      if(period==="PM"&&h!==12)hh+=12;
+      if(period==="AM"&&h===12)hh=0;
+      const mins=hh*60+m;
+      return type==="early_login"?mins<thMin:mins>thMin;
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Login Time</th><th>Hours</th><th>Mode</th></tr>`;
+  }
+  else if(type==="overtime"){
+    title="Overtime";
+    const userThresh = document.getElementById("thresholdHours").value;
+    rows = src.filter(r => {
+      const thresh = userThresh ? parseFloat(userThresh) : getExpectedHours(r.Date);
+      return (r.Hours||0) > thresh;
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
+  }
+  else if(type==="insufficient_hours"){
+    title="Insufficient Hours";
+    const userThresh = document.getElementById("thresholdHours").value;
+    rows = src.filter(r => {
+      const thresh = userThresh ? parseFloat(userThresh) : getExpectedHours(r.Date);
+      return (r.Hours||0) > 0 && (r.Hours||0) < thresh;
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
+  }
+  else if(type==="single_punch"){
+    title="Single Punch";
+    rows=src.filter(r=>(r.Total_Punches||0)===1);
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Punch Time</th><th>Mode</th></tr>`;
+  }
+  else if(type==="fp_without_face"){
+    title="Fingerprint Without Face";
+    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+    const faceKeys=new Set(allFace.map(r=>`${r.Name}||${r.Date}`));
+    const seen=new Set();
+    rows=[];
+    allFP.forEach(r=>{
+      const key=`${r.Name}||${r.Date}`;
+      if(!faceKeys.has(key)&&!seen.has(key)){
+        seen.add(key);
+        rows.push({...r,_faceCount:0,_fpCount:r.Total_Punches||1});
+      }
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>FP First In</th><th>FP Last Out</th><th>Hours</th><th>FP Punches</th></tr>`;
+  }
+  else if(type==="face_without_fp"){
+    title="Face Without Fingerprint";
+    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+    const fpKeys=new Set(allFP.map(r=>`${r.Name}||${r.Date}`));
+    const seen=new Set();
+    rows=[];
+    allFace.forEach(r=>{
+      const key=`${r.Name}||${r.Date}`;
+      if(!fpKeys.has(key)&&!seen.has(key)){
+        seen.add(key);
+        rows.push({...r,_faceCount:r.Total_Punches||1,_fpCount:0});
+      }
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Face First In</th><th>Face Last Out</th><th>Hours</th><th>Face Punches</th></tr>`;
+  }
+  else if(type==="duplicate_punch"){
+    title="Duplicate Punch";
+    const threshSecs=parseInt(document.getElementById("thresholdSeconds").value)||30;
+    rows=[];
+    // We look for records where First_In and Last_Out are within threshold of each other,
+    // or where the data contains punch timestamps close together.
+    // Since summary JSON gives First_In / Last_Out only, we detect duplicates
+    // as records where Last_Out === First_In (same punch recorded twice) or
+    // where time difference between First_In and Last_Out is within the threshold.
+    src.forEach(r=>{
+      const fi=r.First_In||"";
+      const lo=r.Last_Out||"";
+      if(!fi||!lo||fi==="—"||lo==="—")return;
+      const m1=punchTimeToMins(fi);
+      const m2=punchTimeToMins(lo);
+      if(m1===null||m2===null)return;
+      const diffSecs=Math.abs(m2-m1)*60;
+      if(diffSecs<=threshSecs){
+        rows.push({...r,_punch1:fi,_punch2:lo,_diffSecs:diffSecs});
+      }
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Punch 1</th><th>Punch 2</th><th>Diff (secs)</th><th>Source</th></tr>`;
+  }
+  else if(type==="multiple_punch"){
+    title="Multiple Punch";
+    const threshPunches=parseInt(document.getElementById("thresholdPunches").value)||8;
+    rows=src.filter(r=>(r.Total_Punches||0)>threshPunches);
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Total Punches</th><th>Hours</th><th>Source</th></tr>`;
+  }
+  else if(type==="attendance_pattern"){
+    title="Attendance Pattern";
+    const map={};
+    src.forEach(r=>{
+      const k=r.Name||"—";
+      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",loginMins:[],logoutMins:[],totalH:0,totalPunches:0,days:new Set()};
+      map[k].days.add(r.Date);
+      map[k].totalH+=r.Hours||0;
+      map[k].totalPunches+=r.Total_Punches||0;
+      const lm=punchTimeToMins(r.First_In);
+      if(lm!==null)map[k].loginMins.push(lm);
+      const om=punchTimeToMins(r.Last_Out);
+      if(om!==null)map[k].logoutMins.push(om);
+    });
+    rows=Object.values(map).map(e=>{
+      const days=e.days.size;
+      const avgLoginMins=e.loginMins.length?e.loginMins.reduce((a,b)=>a+b,0)/e.loginMins.length:null;
+      const avgLogoutMins=e.logoutMins.length?e.logoutMins.reduce((a,b)=>a+b,0)/e.logoutMins.length:null;
+      return{
+        Name:e.Name,ID:e.ID,days,
+        avgLoginMins,
+        avgLogoutMins,
+        avgLoginStr:minsToTime(avgLoginMins),
+        avgLogoutStr:minsToTime(avgLogoutMins),
+        avgHours:days?(e.totalH/days).toFixed(1):"—",
+        avgPunches:days?(e.totalPunches/days).toFixed(1):"—",
+      };
+    });
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Working Days</th><th>Avg Login</th><th>Avg Logout</th><th>Avg Hours</th><th>Avg Punches/Day</th></tr>`;
+  }
+  else if(type==="source_comparison"){
+    title="Attendance Source Comparison";
+    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+    const allGHR =applyBaseFilters(ghrData.map(r=>({...r,_mode:"greathr"})));
+    const map={};
+    const ensureEmp=(r)=>{
+      const k=r.Name||"—";
+      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",faceDays:0,fpDays:0,ghrDays:0,allDays:new Set()};
+      return map[k];
+    };
+    allFace.forEach(r=>{const e=ensureEmp(r);e.faceDays++;e.allDays.add(r.Date);});
+    allFP.forEach(r=>  {const e=ensureEmp(r);e.fpDays++;  e.allDays.add(r.Date);});
+    allGHR.forEach(r=> {const e=ensureEmp(r);e.ghrDays++; e.allDays.add(r.Date);});
+    rows=Object.values(map).map(e=>({...e,totalDays:e.allDays.size}));
+    headHtml=`<tr><th>Employee</th><th>ID</th><th>Face Days</th><th>Fingerprint Days</th><th>Great HR Days</th><th>Total Working Days</th></tr>`;
+  }
+
+  reportRows=[...rows];
+  document.getElementById("resHead").innerHTML=headHtml;
+  document.getElementById("resultsTitle").textContent=title;
+  document.getElementById("resultsSection").style.display="";
+  document.getElementById("idleHint").style.display="none";
+  document.getElementById("btnExport").style.display="";
+  document.getElementById("resSearch").value="";
+  document.getElementById("resSort").value="default";
+
+  renderReportInfoHeader(title);
+  renderSummaryCards(type, rows);
+  filterResults();
+}
+
+/* ── Filter / sort results table ── */
+function rankValueForType(type, r){
+  if(type==="early_login"||type==="late_login") return punchTimeToMins(r.First_In) ?? -Infinity;
+  if(type==="overtime"||type==="insufficient_hours") return r.Hours||0;
+  if(type==="fp_without_face") return r._fpCount||0;
+  if(type==="face_without_fp") return r._faceCount||0;
+  if(type==="multiple_punch") return r.Total_Punches||0;
+  if(type==="duplicate_punch") return -(r._diffSecs||0); // closest pairs rank highest
+  if(type==="attendance_pattern") return parseFloat(r.avgHours)||0;
+  if(type==="summary") return parseFloat(r.avgH)||0;
+  return r.Hours||r.totalH||0;
+}
+
+function filterResults(){
+  const type=currentReportType;
+  const q=document.getElementById("resSearch").value.toLowerCase().trim();
+  const sort=document.getElementById("resSort").value;
+  const topN=parseInt(document.getElementById("rankTop").value)||0;
+
+  let rows=[...reportRows].filter(r=>{
+    if(!q)return true;
+    const name=(r.Name||"").toLowerCase();
+    const id=(r.ID||"").toString().toLowerCase();
+    return name.includes(q)||id.includes(q);
+  });
+
+  rows.sort((a,b)=>{
+    if(sort==="name_asc") return(a.Name||"").localeCompare(b.Name||"");
+    if(sort==="name_desc")return(b.Name||"").localeCompare(a.Name||"");
+    if(sort==="date_desc")return((b.Date||"").toString()).localeCompare((a.Date||"").toString());
+    if(sort==="date_asc") return((a.Date||"").toString()).localeCompare((b.Date||"").toString());
+    if(sort==="hours_desc")return(b.Hours||b.totalH||0)-(a.Hours||a.totalH||0);
+    if(sort==="hours_asc") return(a.Hours||a.totalH||0)-(b.Hours||b.totalH||0);
+    return 0;
+  });
+
+  if(topN>0){
+    rows=[...rows].sort((a,b)=>rankValueForType(type,b)-rankValueForType(type,a)).slice(0,topN);
+  }
+
+  filteredRows=rows;
+  document.getElementById("resCount").textContent=`${rows.length} record${rows.length!==1?"s":""}`;
+  document.getElementById("resFoot").textContent=`${rows.length} record${rows.length!==1?"s":""} shown`;
+
+  const tbody=document.getElementById("resTbody");
+  if(!rows.length){
+    const q_val=document.getElementById("resSearch").value.trim();
+    const hasDateFilter=document.getElementById("fDateFrom").value||document.getElementById("fDateTo").value;
+    const hasEmpFilter=document.getElementById("fEmpId").value.trim()||document.getElementById("fEmpName").value.trim();
+    const tips=[];
+    if(q_val) tips.push("Clear the results filter field above the table");
+    if(hasDateFilter) tips.push("Widen the date range or remove date filters");
+    if(hasEmpFilter) tips.push("Remove the Employee ID or Name filter");
+    if(!q_val&&!hasDateFilter&&!hasEmpFilter) tips.push("Try a different report type");
+    tips.push("Switch the attendance source tab (All / Face / Fingerprint / Great HR)");
+    tbody.innerHTML=`<tr><td colspan="10">
+      <div class="empty-state">
+        <div class="es-icon">🔍</div>
+        <div class="es-title">No employees matched the selected criteria</div>
+        <div class="es-sub">The current filters returned no records for this report.</div>
+        <div class="es-tips">
+          ${tips.map(t=>`<div class="es-tip">${t}</div>`).join("")}
+        </div>
+      </div>
+    </td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML=rows.map((r,i)=>buildRow(type,r,i)).join("");
+}
+
+function buildRow(type,r,i){
+  const id=r.ID||r["User ID"]||r["Employee No"]||"—";
+  const date=(r.Date||"").toString().slice(0,10);
+  const safeName=(r.Name||"").replace(/'/g,"\\'");
+  const safeId=id.replace(/'/g,"\\'");
+  // Rows with a date get a panel opener; aggregate rows (summary, pattern, top, comparison) do not
+  const hasDate=!!date;
+  const rowClick=hasDate?`onclick="openPanel('${safeName}','${date}','${safeId}')" style="cursor:pointer"`:"";
+
+  if(type==="summary"){
+    return`<tr>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="font-weight:600">${r.days}</td>
+      <td><span class="mode-pill mode-face">${r.face}</span></td>
+      <td><span class="mode-pill mode-fp">${r.fp}</span></td>
+      <td><span class="mode-pill mode-ghr">${r.ghr}</span></td>
+      <td style="font-weight:600;color:var(--amber)">${r.avgH==="—"?r.avgH:r.avgH+"h"}</td>
+      <td style="color:var(--muted)">${r.punches}</td>
+    </tr>`;
+  }
+  if(type==="early_login"||type==="late_login"){
+    const ls=getLoginStatus(r.First_In);
+    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td>${firstInHtml}</td>
+      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
+      <td>${modePill(r._mode)}</td>
+    </tr>`;
+  }
+  if(type==="overtime"||type==="insufficient_hours"){
+    const ls=getLoginStatus(r.First_In);
+    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td>${firstInHtml}</td>
+      <td class="t-out">${r.Last_Out||"—"}</td>
+      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
+      <td>${modePill(r._mode)}</td>
+      <td>${statusBadge(r.Hours||0, r.Date)}</td>
+    </tr>`;
+  }
+  if(type==="single_punch"){
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td class="t-in">${r.First_In||"—"}</td>
+      <td>${modePill(r._mode)}</td>
+    </tr>`;
+  }
+  if(type==="fp_without_face"||type==="face_without_fp"){
+    const off=getOfficialTimes(r.Name,(r.Date||"").toString().slice(0,10));
+    const countLabel = type==="fp_without_face" ? (r._fpCount||"—") : (r._faceCount||"—");
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td class="t-in">${r.First_In||"—"}</td>
+      <td class="t-out">${r.Last_Out||"—"}</td>
+      <td style="font-weight:600">${off.hours==="—"?"—":off.hours+"h"}</td>
+      <td style="color:var(--muted)">${countLabel}</td>
+    </tr>`;
+  }
+  if(type==="duplicate_punch"){
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td class="t-in">${r._punch1||"—"}</td>
+      <td class="t-in">${r._punch2||"—"}</td>
+      <td style="font-weight:600;color:var(--accent2)">${r._diffSecs}s</td>
+      <td>${modePill(r._mode)}</td>
+    </tr>`;
+  }
+  if(type==="multiple_punch"){
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td style="font-weight:600;color:var(--accent2)">${r.Total_Punches||"—"}</td>
+      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
+      <td>${modePill(r._mode)}</td>
+    </tr>`;
+  }
+  if(type==="attendance_pattern"){
+    return`<tr>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="font-weight:600">${r.days}</td>
+      <td class="t-in">${r.avgLoginStr||"—"}</td>
+      <td class="t-out">${r.avgLogoutStr||"—"}</td>
+      <td style="font-weight:600;color:var(--amber)">${r.avgHours}h</td>
+      <td style="color:var(--muted)">${r.avgPunches}</td>
+    </tr>`;
+  }
+  if(type==="source_comparison"){
+    const total=r.totalDays||0;
+    const fPct=total?Math.round(r.faceDays/total*100):0;
+    const fpPct=total?Math.round(r.fpDays/total*100):0;
+    const gPct=total?Math.round(r.ghrDays/total*100):0;
+    return`<tr>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td><span class="mode-pill mode-face">${r.faceDays} <span style="opacity:.6;font-weight:400">(${fPct}%)</span></span></td>
+      <td><span class="mode-pill mode-fp">${r.fpDays} <span style="opacity:.6;font-weight:400">(${fpPct}%)</span></span></td>
+      <td><span class="mode-pill mode-ghr">${r.ghrDays} <span style="opacity:.6;font-weight:400">(${gPct}%)</span></span></td>
+      <td style="font-weight:700">${r.totalDays}</td>
+    </tr>`;
+  }
+  return`<tr><td colspan="8">${JSON.stringify(r)}</td></tr>`;
+}
+
+/* ── Build data rows for export ── */
+function buildExportRows(){
+  const type=currentReportType;
+  const headers=[...document.querySelectorAll("#resHead th")].map(h=>h.textContent);
+  const dataRows=filteredRows.map(r=>{
+    const id=r.ID||r["User ID"]||r["Employee No"]||"";
+    if(type==="summary")               return[r.Name,id,r.days,r.face,r.fp,r.ghr,r.avgH,r.punches];
+    if(["early_login","late_login"].includes(type)) return[r.Name,id,r.Date,r.First_In,r.Hours,r._mode];
+    if(["overtime","insufficient_hours"].includes(type)){const h=r.Hours||0;const full=getExpectedHours(r.Date);const half=full/2;const status=h>=full?"Full day":h>=half?"Half day":"Short";return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._mode,status];}
+    if(type==="single_punch")          return[r.Name,id,r.Date,r.First_In,r._mode];
+    if(type==="fp_without_face")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._fpCount];
+    if(type==="face_without_fp")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._faceCount];
+    if(type==="duplicate_punch")       return[r.Name,id,r.Date,r._punch1,r._punch2,r._diffSecs,r._mode];
+    if(type==="multiple_punch")        return[r.Name,id,r.Date,r.Total_Punches,r.Hours,r._mode];
+    if(type==="attendance_pattern")    return[r.Name,id,r.days,r.avgLoginStr,r.avgLogoutStr,r.avgHours,r.avgPunches];
+    if(type==="source_comparison")     return[r.Name,id,r.faceDays,r.fpDays,r.ghrDays,r.totalDays];
+    return Object.values(r);
+  });
+  return{headers,dataRows};
+}
+
+/* ── Export CSV ── */
+function exportCSV(){
+  if(!filteredRows.length){alert("No data to export.");return;}
+  const title=document.getElementById("resultsTitle").textContent;
+  const{headers,dataRows}=buildExportRows();
+  const csvRows=[headers.join(","),...dataRows.map(cols=>cols.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(","))];
+  const blob=new Blob([csvRows.join("\n")],{type:"text/csv"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`${title.replace(/\s+/g,"_")}.csv`;
+  a.click();
+}
+
+/* ── Export Excel ── */
+function exportExcel(){
+  if(!filteredRows.length){alert("No data to export.");return;}
+  const title=document.getElementById("resultsTitle").textContent;
+  const{headers,dataRows}=buildExportRows();
+  const escape=s=>String(s??'').replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  const rows=[headers,...dataRows];
+  const table=`<table>${rows.map((r,i)=>`<tr>${r.map(c=>`<${i===0?"th":"td"}>${escape(c)}</${i===0?"th":"td"}>`).join("")}</tr>`).join("")}</table>`;
+  const html=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${escape(title)}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${table}</body></html>`;
+  const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download=`${title.replace(/\s+/g,"_")}.xls`;
+  a.click();
+}
+
+/* ── Print ── */
+function printReport(){window.print();}
+
+function openPanel(name, date, uid) {
+  const allForDay = punchData.filter(p => p.Name===name && (p.Date||"").slice(0,10)===date);
+  const totalPunches = allForDay.length;
+  const officialTimes = allForDay
+    .filter(p => p.Mode==="face" || p.Mode==="greathr")
+    .map(p => p.Time).sort();
+  const firstIn = officialTimes.length>=1 ? officialTimes[0].slice(0,5) : "—";
+  const lastOut = officialTimes.length>=2 ? officialTimes[officialTimes.length-1].slice(0,5) : "—";
+
+  document.getElementById("panel-name").textContent = name;
+  document.getElementById("panel-id").textContent   = uid ? "Employee ID: #"+uid : "";
+  document.getElementById("pe-name").textContent    = name;
+  document.getElementById("pe-id").textContent      = uid ? "#"+uid : "No ID on record";
+  document.getElementById("panel-day-label").textContent = "📅 "+formatDateLong(date);
+  document.getElementById("ps-firstin").textContent = firstIn;
+  document.getElementById("ps-lastout").textContent = lastOut;
+  document.getElementById("ps-punches").textContent = totalPunches;
+
+  const modes=[];
+  if(faceData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date)) modes.push(`<span class="mode-pill mode-face">👤 Face</span>`);
+  if(fpData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`);
+  if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
+  document.getElementById("pe-modes").innerHTML = modes.join("");
+
+  const rows = allForDay.slice().sort((a,b)=>a.Time.localeCompare(b.Time));
+  const total = rows.length;
+  document.getElementById("punch-foot").textContent = `${total} punch event${total!==1?"s":""} on this day`;
+  const tbody = document.getElementById("punch-tbody");
+  if (!rows.length) {
+    tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--muted)">No punch events found</td></tr>`;
+  } else {
+    tbody.innerHTML = rows.map((p,j)=>{
+      const isIn=j===0, isOut=j===total-1&&total>1;
+      const label=isIn?"🟢 In":isOut?"🔴 Out":`⚪ #${j+1}`;
+      const tc=isIn?"punch-in":isOut?"punch-out":"";
+      const mp=p.Mode==="face"
+        ?`<span class="mode-pill mode-face">👤 Face</span>`
+        :p.Mode==="fingerprint"
+        ?`<span class="mode-pill mode-fp">🖐 FP</span>`
+        :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
+      return`<tr>
+        <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
+        <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+        <td style="font-size:13px">${label}</td>
+        <td>${mp}</td>
+        <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
+      </tr>`;
+    }).join("");
+  }
+  document.getElementById("overlay").classList.add("open");
+  document.getElementById("panel").classList.add("open");
+}
+
+function closePanel(){
+  document.getElementById("overlay").classList.remove("open");
+  document.getElementById("panel").classList.remove("open");
+}
+
+function formatDateLong(d){
+  if(!d)return"—";
+  return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+}
+
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closePanel();});
+
+/* ── Clear ── */
+function clearAll(){
+  ["fEmpId","fEmpName","fDateFrom","fDateTo","thresholdTime"].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.value=el.type==="time"?"09:00":"";
+  });
+  document.getElementById("thresholdHours").value="8";
+  document.getElementById("thresholdSeconds").value="30";
+  document.getElementById("thresholdPunches").value="8";
+  document.getElementById("rankTop").value="";
+  const sel=document.getElementById("reportType");
+  sel.value="";
+  sel.classList.add("unselected");
+  document.getElementById("btnGenerate").disabled=true;
+  const desc=document.getElementById("reportDesc");
+  desc.classList.add("placeholder");
+  document.getElementById("reportDescText").textContent="Select a report above to see its description.";
+  desc.querySelector(".report-desc-icon").textContent="💡";
+  document.getElementById("thresholdRow").style.display="none";
+  document.getElementById("resultsSection").style.display="none";
+  document.getElementById("idleHint").style.display="";
+  document.getElementById("btnExport").style.display="none";
+  reportRows=[];filteredRows=[];currentReportType="";
+}
+</script>
+<!-- Overlay + Panel (Punch Details) -->
+<div class="overlay" id="overlay" onclick="closePanel()"></div>
+<div class="panel" id="panel">
+  <div class="panel-header">
+    <div>
+      <h2 id="panel-name">—</h2>
+      <div class="ph-sub" id="panel-id">—</div>
+    </div>
+    <button class="btn-close" onclick="closePanel()">×</button>
+  </div>
+  <div class="panel-body">
+    <div class="panel-emp-header">
+      <div class="panel-emp-name" id="pe-name">—</div>
+      <div class="panel-emp-id"   id="pe-id">—</div>
+      <div class="panel-mode-pills" id="pe-modes"></div>
+    </div>
+    <div class="panel-stat-row">
+      <div class="panel-stat">
+        <div class="ps-label">First In</div>
+        <div class="ps-val" id="ps-firstin" style="color:var(--green);font-size:16px">—</div>
+      </div>
+      <div class="panel-stat">
+        <div class="ps-label">Last Out</div>
+        <div class="ps-val" id="ps-lastout" style="color:var(--accent2);font-size:16px">—</div>
+      </div>
+      <div class="panel-stat">
+        <div class="ps-label">Total Punches</div>
+        <div class="ps-val" id="ps-punches" style="color:var(--accent)">—</div>
+      </div>
+    </div>
+    <div class="panel-day-label" id="panel-day-label">📅 —</div>
+    <div id="pv-punches">
+      <div class="panel-section-title">Punch Events for This Day</div>
+      <div class="panel-table-wrap">
+        <table class="panel-table">
+          <thead><tr><th>#</th><th>Time</th><th>Punch</th><th>Mode</th><th>Device</th></tr></thead>
+          <tbody id="punch-tbody"></tbody>
+        </table>
+        <div class="panel-foot" id="punch-foot">—</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
