@@ -302,6 +302,9 @@ tbody tr:hover .badge{transform:translateY(-1px);}
     <label id="thresholdLabel">Threshold Time</label>
     <input type="time" id="thresholdTime" value="09:00">
     <input type="number" id="thresholdHours" value="8" min="0" max="24" step="0.5" style="display:none;">
+    <span id="wdLabel" style="display:none;font-size:13px;color:var(--muted)">h weekdays</span>
+    <input type="number" id="thresholdHoursSat" value="4" min="0" max="24" step="0.5" style="display:none;">
+    <span id="satUnitLabel" style="display:none;font-size:13px;color:var(--muted)">h Saturdays</span>
     <input type="number" id="thresholdSeconds" value="30" min="1" max="3600" step="1" style="display:none;">
     <input type="number" id="thresholdPunches" value="8" min="1" max="100" step="1" style="display:none;">
     <span id="thresholdUnit">AM</span>
@@ -425,8 +428,12 @@ function onReportTypeChange(){
   const btnGenerate=document.getElementById("btnGenerate");
 
   // Hide all threshold controls first
-  [tTime,tHours,tSeconds,tPunches].forEach(el=>el.style.display="none");
+  [tTime,tHours,document.getElementById("thresholdHoursSat"),tSeconds,tPunches].forEach(el=>el.style.display="none");
   tUnit.textContent="";
+  const satLbl=document.getElementById("satUnitLabel");
+  if(satLbl) satLbl.style.display="none";
+  const wdLbl=document.getElementById("wdLabel");
+  if(wdLbl) wdLbl.style.display="none";
 
   if(!t){
     sel.classList.add("unselected");
@@ -454,9 +461,14 @@ function onReportTypeChange(){
     tLabel.textContent=t==="late_login"?"After time":"Before time";
   }else if(hourReports.includes(t)){
     row.style.display="flex";
-    tHours.style.display="";
     tLabel.textContent=t==="overtime"?"More than":"Less than";
-    tUnit.textContent="hours";
+    tHours.style.display="";
+    tHours.placeholder="Weekday hrs";
+    document.getElementById("thresholdHoursSat").style.display="";
+    document.getElementById("thresholdHoursSat").placeholder="Saturday hrs";
+    tUnit.textContent="";
+    document.getElementById("wdLabel").style.display="";
+    document.getElementById("satUnitLabel").style.display="";
   }else if(t==="duplicate_punch"){
     row.style.display="flex";
     tSeconds.style.display="";
@@ -782,18 +794,28 @@ function generateReport(){
   }
   else if(type==="overtime"){
     title="Overtime";
-    const userThresh = document.getElementById("thresholdHours").value;
+    const wdThresh  = document.getElementById("thresholdHours").value;
+    const satThresh = document.getElementById("thresholdHoursSat").value;
     rows = src.filter(r => {
-      const thresh = userThresh ? parseFloat(userThresh) : getExpectedHours(r.Date);
+      const dateStr = (r.Date||"").slice(0,10);
+      const isSat   = new Date(dateStr+"T00:00:00").getDay() === 6;
+      const thresh  = isSat
+        ? (satThresh ? parseFloat(satThresh) : 4)
+        : (wdThresh  ? parseFloat(wdThresh)  : 8);
       return (r.Hours||0) > thresh;
     });
     headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
   }
   else if(type==="insufficient_hours"){
     title="Insufficient Hours";
-    const userThresh = document.getElementById("thresholdHours").value;
+    const wdThresh  = document.getElementById("thresholdHours").value;
+    const satThresh = document.getElementById("thresholdHoursSat").value;
     rows = src.filter(r => {
-      const thresh = userThresh ? parseFloat(userThresh) : getExpectedHours(r.Date);
+      const dateStr = (r.Date||"").slice(0,10);
+      const isSat   = new Date(dateStr+"T00:00:00").getDay() === 6;
+      const thresh  = isSat
+        ? (satThresh ? parseFloat(satThresh) : 4)
+        : (wdThresh  ? parseFloat(wdThresh)  : 8);
       return (r.Hours||0) > 0 && (r.Hours||0) < thresh;
     });
     headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
@@ -1240,6 +1262,7 @@ function clearAll(){
     if(el)el.value=el.type==="time"?"09:00":"";
   });
   document.getElementById("thresholdHours").value="8";
+  document.getElementById("thresholdHoursSat").value="4";
   document.getElementById("thresholdSeconds").value="30";
   document.getElementById("thresholdPunches").value="8";
   document.getElementById("rankTop").value="";

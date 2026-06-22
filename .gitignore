@@ -1,0 +1,6 @@
+*.xlsx
+*.xls
+*.json
+*.bak
+__pycache__/
+*.pyc
