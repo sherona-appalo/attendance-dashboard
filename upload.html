@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload — Attendance</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0f1117; --surface: #1a1d27; --surface2: #22263a; --border: #2e3347;
+      --accent: #6c63ff; --accent2: #4ecca3; --text: #e8eaf0; --muted: #7b80a0;
+      --danger: #ff5c6c; --success: #4ecca3; --radius: 12px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; padding: 24px; }
+    .logo { font-family: 'Space Grotesk', sans-serif; font-size: 13px; font-weight: 600;
+      letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 12px; }
+    h1 { font-family: 'Space Grotesk', sans-serif; font-size: 28px; font-weight: 700;
+      color: var(--text); margin-bottom: 8px; text-align: center; }
+    .subtitle { color: var(--muted); font-size: 14px; text-align: center; margin-bottom: 40px;
+      max-width: 420px; line-height: 1.6; }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 32px; width: 100%; max-width: 520px; }
+    .upload-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 20px;
+      text-align: center; cursor: pointer; transition: border-color 0.2s, background 0.2s;
+      position: relative; margin-bottom: 16px; }
+    .upload-zone:hover, .upload-zone.dragover { border-color: var(--accent); background: rgba(108,99,255,0.06); }
+    .upload-zone.done { border-color: var(--success); background: rgba(78,204,163,0.06); }
+    .upload-zone input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+    .upload-icon { font-size: 28px; margin-bottom: 10px; display: block; }
+    .upload-label { font-family: 'Space Grotesk', sans-serif; font-weight: 600; font-size: 14px; color: var(--text); margin-bottom: 4px; }
+    .upload-hint { font-size: 12px; color: var(--muted); }
+    .file-name { font-size: 12px; color: var(--success); margin-top: 8px; font-weight: 500; display: none; }
+    .upload-zone.done .file-name { display: block; }
+    .upload-zone.done .upload-hint { display: none; }
+    .divider { height: 1px; background: var(--border); margin: 24px 0; }
+    .btn { width: 100%; padding: 14px; background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; font-family: 'Space Grotesk', sans-serif; font-size: 15px; font-weight: 600;
+      cursor: pointer; transition: opacity 0.2s, transform 0.1s; display: flex; align-items: center;
+      justify-content: center; gap: 10px; }
+    .btn:hover { opacity: 0.9; } .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+    .progress-wrap { display: none; margin-top: 20px; }
+    .progress-wrap.show { display: block; }
+    .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+    .progress-bar-bg { height: 6px; background: var(--surface2); border-radius: 99px; overflow: hidden; }
+    .progress-bar { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 99px; width: 0%; transition: width 0.3s ease; }
+    .progress-steps { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
+    .step { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 8px; }
+    .step.active { color: var(--text); } .step.done { color: var(--success); }
+    .step-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+    .step.active .step-dot { background: var(--accent); } .step.done .step-dot { background: var(--success); }
+    .cached-banner { display: none; background: rgba(78,204,163,0.1); border: 1px solid rgba(78,204,163,0.3);
+      border-radius: 10px; padding: 14px 16px; margin-bottom: 20px; font-size: 13px;
+      color: var(--success); align-items: center; gap: 10px; }
+    .cached-banner.show { display: flex; }
+    .cached-banner strong { color: var(--text); }
+    .go-dashboard { margin-top: 12px; display: block; text-align: center; font-size: 13px;
+      color: var(--accent); text-decoration: none; font-weight: 500; }
+    .error-msg { display: none; background: rgba(255,92,108,0.1); border: 1px solid rgba(255,92,108,0.3);
+      border-radius: 10px; padding: 14px 16px; margin-top: 16px; font-size: 13px; color: var(--danger); }
+    .error-msg.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="logo">Attendance System</div>
+  <h1>Import Centre</h1>
+  <p class="subtitle">Upload the Biometric and GreatHR Excel exports. Processed locally — nothing is sent to any server.</p>
+
+  <div class="card">
+    <div class="cached-banner" id="cachedBanner">
+      <span>✓</span>
+      <span><strong>Previous data found.</strong> Re-upload below to refresh, or open the dashboard.</span>
+    </div>
+    <a href="index.html" class="go-dashboard" id="goDash" style="display:none">→ Open Dashboard with saved data</a>
+
+    <div class="upload-zone" id="bioZone">
+      <input type="file" id="bioFile" accept=".xlsx,.xls">
+      <span class="upload-icon">🧬</span>
+      <div class="upload-label">Biometric Report</div>
+      <div class="upload-hint">Consolidated sheet · .xlsx</div>
+      <div class="file-name" id="bioFileName"></div>
+    </div>
+
+    <div class="upload-zone" id="ghrZone">
+      <input type="file" id="ghrFile" accept=".xlsx,.xls">
+      <span class="upload-icon">📋</span>
+      <div class="upload-label">GreatHR Report</div>
+      <div class="upload-hint">Sheet0 · .xlsx</div>
+      <div class="file-name" id="ghrFileName"></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <button class="btn" id="processBtn" disabled onclick="processFiles()">
+      <span>Import Data</span>
+    </button>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressLabel">Processing…</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar" id="progressBar"></div></div>
+      <div class="progress-steps">
+        <div class="step" id="step1"><div class="step-dot"></div>Reading Biometric file</div>
+        <div class="step" id="step2"><div class="step-dot"></div>Splitting Face vs Fingerprint punches</div>
+        <div class="step" id="step3"><div class="step-dot"></div>Reading GreatHR file</div>
+        <div class="step" id="step4"><div class="step-dot"></div>Building daily summaries</div>
+        <div class="step" id="step5"><div class="step-dot"></div>Building punch details</div>
+        <div class="step" id="step6"><div class="step-dot"></div>Saving to local cache</div>
+      </div>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script>
+  // ── UI setup ──────────────────────────────────────────────────────────────
+  const bioInput = document.getElementById('bioFile');
+  const ghrInput = document.getElementById('ghrFile');
+  const processBtn = document.getElementById('processBtn');
+
+  if (localStorage.getItem('att_face_summary')) {
+    document.getElementById('cachedBanner').classList.add('show');
+    document.getElementById('goDash').style.display = 'block';
+  }
+
+  function setupZone(input, zone, nameEl) {
+    input.addEventListener('change', () => {
+      if (input.files[0]) { zone.classList.add('done'); nameEl.textContent = '✓ ' + input.files[0].name; checkReady(); }
+    });
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault(); zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) {
+        const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
+        zone.classList.add('done'); nameEl.textContent = '✓ ' + file.name; checkReady();
+      }
+    });
+  }
+  setupZone(bioInput, document.getElementById('bioZone'), document.getElementById('bioFileName'));
+  setupZone(ghrInput, document.getElementById('ghrZone'), document.getElementById('ghrFileName'));
+  function checkReady() { processBtn.disabled = !(bioInput.files[0] && ghrInput.files[0]); }
+
+  function setStep(n, state) { document.getElementById('step'+n).className = 'step '+state; }
+  function setProgress(pct, label) {
+    document.getElementById('progressBar').style.width = pct+'%';
+    document.getElementById('progressPct').textContent = pct+'%';
+    if (label) document.getElementById('progressLabel').textContent = label;
+  }
+  function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.add('show'); }
+  function readFile(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.onerror = () => rej(new Error('Failed to read ' + file.name));
+      r.readAsArrayBuffer(file);
+    });
+  }
+  function tick(ms=50) { return new Promise(r => setTimeout(r, ms)); }
+
+  // ── Biometric parser — mirrors attendance.py exactly ─────────────────────
+  // attendance.py: read_excel("Biometric_Report.xlsx", sheet_name="Consolidated", header=3)
+  // header=3 means pandas skips rows 0-2 and uses row index 3 (4th row) as headers.
+  // Rows below that are data, EXCEPT interspersed date-only rows.
+  function parseBiometric(ab) {
+    const wb = XLSX.read(ab, { type: 'array', cellDates: false });
+    const ws = wb.Sheets['Consolidated'];
+    if (!ws) throw new Error('Sheet "Consolidated" not found in Biometric file.');
+
+    // Read all rows as raw arrays (no header interpretation)
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+    // attendance.py uses header=3, so row index 3 is the header row
+    // But be flexible — scan first 8 rows for the one containing "User ID"
+    let headerRowIdx = -1;
+    for (let i = 0; i < Math.min(raw.length, 8); i++) {
+      if (raw[i] && raw[i].some(c => String(c||'').trim() === 'User ID')) {
+        headerRowIdx = i; break;
+      }
+    }
+    if (headerRowIdx === -1) throw new Error('Header row with "User ID" not found. Expected on row 4 (index 3).');
+
+    const headers = raw[headerRowIdx].map(h => String(h||'').trim());
+    // Map column indices — mirrors df.columns access in attendance.py
+    const COL = {};
+    headers.forEach((h, i) => { COL[h] = i; });
+
+    const iUserID = COL['User ID'];
+    const iName   = COL['Name'];
+    const iPunch  = COL['Punch Time'];
+    const iDevice = COL['Device/Source Detail'];
+    const iMode   = COL['Punch Mode'];
+
+    if (iUserID === undefined || iName === undefined || iPunch === undefined)
+      throw new Error(`Missing required columns. Found: ${headers.filter(Boolean).join(', ')}`);
+    if (iMode === undefined)
+      console.warn("'Punch Mode' column not found — all records treated as Face (mirrors attendance.py).");
+
+    // ── Parse rows — attendance.py drops rows where User ID is NaN/blank,
+    //   and drops rows where Name or Punch Time is NaN.
+    //   Date-only rows have a date value somewhere but no User ID / Name.
+    const allRecords = []; // raw punch objects, date resolved
+    let currentDate = null;
+
+    // Helper: Excel serial or string → "YYYY-MM-DD"
+    function toDateStr(val) {
+      if (!val && val !== 0) return null;
+      if (typeof val === 'number') {
+        // Excel date serial (days since 1899-12-30)
+        const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+        const y = d.getUTCFullYear();
+        const mo = String(d.getUTCMonth()+1).padStart(2,'0');
+        const dy = String(d.getUTCDate()).padStart(2,'0');
+        if (y < 1990 || y > 2100) return null;
+        return `${y}-${mo}-${dy}`;
+      }
+      if (typeof val === 'string') {
+        const s = val.trim();
+        // YYYY-MM-DD
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0,10);
+        // DD/MM/YYYY
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (m) return `${m[3]}-${String(m[2]).padStart(2,'0')}-${String(m[1]).padStart(2,'0')}`;
+      }
+      return null;
+    }
+
+    // Helper: Excel time fraction or "HH:MM:SS" string → "HH:MM:SS"
+    function toPunchTimeStr(val, dateStr) {
+      // attendance.py: pd.to_datetime(df["Punch Time"]) — the Punch Time column
+      // contains time-of-day values (fraction of a day) in Excel numeric format,
+      // or a string like "09:11:00".
+      if (!val && val !== 0) return null;
+      if (typeof val === 'number') {
+        // Could be a date+time serial or a pure time fraction
+        let frac = val % 1;
+        if (frac < 0) frac += 1;
+        const totalSec = Math.round(frac * 86400);
+        const h = Math.floor(totalSec / 3600) % 24;
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }
+      if (typeof val === 'string') {
+        const s = val.trim();
+        // "HH:MM" or "HH:MM:SS"
+        const m = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+        if (m) return `${String(m[1]).padStart(2,'0')}:${m[2]}:${m[3]||'00'}`;
+        // datetime string "2026-04-01 09:11:00"
+        const dt = s.match(/\d{4}-\d{2}-\d{2}\s+(\d{2}:\d{2}(?::\d{2})?)/);
+        if (dt) return dt[1].length === 5 ? dt[1]+':00' : dt[1];
+      }
+      return null;
+    }
+
+    for (let r = headerRowIdx + 1; r < raw.length; r++) {
+      const row = raw[r];
+      if (!row || row.every(c => !c)) continue;
+
+      const rawUserID = row[iUserID];
+      const rawName   = iName !== undefined ? row[iName] : null;
+      const rawPunch  = iPunch !== undefined ? row[iPunch] : null;
+
+      const userIDStr = String(rawUserID||'').trim();
+      const nameStr   = String(rawName||'').trim();
+
+      // attendance.py: drop rows where User ID is NaN/""/nan/NaT
+      const badUID = !rawUserID || ['', 'nan', 'NaT', 'NaN'].includes(userIDStr);
+      // attendance.py: drop rows where Name is NaN or empty
+      const badName = !rawName || nameStr === '' || nameStr === 'nan';
+
+      if (badUID || badName) {
+        // This might be a date-separator row.
+        // In the Biometric Excel, date rows appear as rows where only one cell
+        // (typically not in the User ID or Name columns) holds a date value.
+        // Scan all cells in the row for a parseable date.
+        for (let c = 0; c < row.length; c++) {
+          if (c === iUserID || c === iName) continue; // skip UID/Name cols
+          const ds = toDateStr(row[c]);
+          if (ds) { currentDate = ds; break; }
+        }
+        continue;
+      }
+
+      // attendance.py: dropna(subset=["Punch Time"]) + to_datetime
+      if (!rawPunch) continue;
+      const punchTimeStr = toPunchTimeStr(rawPunch, currentDate);
+      if (!punchTimeStr) continue;
+
+      // attendance.py: df["Date"] = df["Punch Time"].dt.date
+      // We use currentDate tracked from date-separator rows above,
+      // but also try to extract date from the Punch Time cell if it's a datetime serial
+      let rowDate = currentDate;
+      if (!rowDate && typeof rawPunch === 'number' && rawPunch > 1) {
+        // Might be a full datetime serial
+        rowDate = toDateStr(Math.floor(rawPunch));
+      }
+
+      const modeRaw = (iMode !== undefined) ? String(row[iMode]||'').trim() : '';
+
+      allRecords.push({
+        'User ID': userIDStr,
+        'Name':    nameStr,
+        'Date':    rowDate,
+        'Punch Time': punchTimeStr,   // "HH:MM:SS"
+        'Device/Source Detail': String(row[iDevice]||'').trim(),
+        'Punch Mode': modeRaw
+      });
+    }
+
+    // attendance.py: dropna(subset=["Punch Time"]) already done above
+    // attendance.py: df["User ID"] = df["User ID"].astype(str).str.strip()
+    //   filter out nan/NaT already done above
+
+    // attendance.py: split on Punch Mode containing "face"
+    // face_df = df[df["Punch Mode"].str.lower().str.contains("face")]
+    // fp_df   = df[~df["Punch Mode"].str.lower().str.contains("face")]
+    // fp_df   = fp_df[fp_df["Punch Mode"].str.lower() != "nan"]
+    let faceRecords = [], fpRecords = [];
+
+    if (iMode !== undefined) {
+      allRecords.forEach(r => {
+        const m = r['Punch Mode'].toLowerCase();
+        if (m.includes('face')) {
+          faceRecords.push(r);
+        } else if (m !== '' && m !== 'nan') {
+          fpRecords.push(r);
+        }
+      });
+    } else {
+      // No Punch Mode column — all treated as face (mirrors attendance.py warning)
+      faceRecords = allRecords;
+    }
+
+    return { faceRecords, fpRecords };
+  }
+
+  // ── GreatHR parser — mirrors attendance.py exactly ────────────────────────
+  // attendance.py: read_excel("GreatHR.xlsx", header=0)
+  // renames: "Employee Name"→"Name", "Swipe Date"→"Punch Time"
+  // Employee No filled, Name stripped, Punch Time → to_datetime, Date extracted
+  function parseGreatHR(ab) {
+    const wb = XLSX.read(ab, { type: 'array', cellDates: false });
+    // attendance.py doesn't specify sheet_name → defaults to first sheet
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    if (!raw.length) throw new Error('GreatHR file appears empty.');
+
+    const headers = raw[0].map(h => String(h||'').trim());
+    const COL = {};
+    headers.forEach((h, i) => { COL[h] = i; });
+
+    const iEmpNo   = COL['Employee No'];
+    const iEmpName = COL['Employee Name'];
+    const iSwipe   = COL['Swipe Date'];
+    const iShift   = COL['Shift'];
+    const iDoor    = COL['Door/Address'];
+    const iLocType = COL['Location Type'];
+    const iSwType  = COL['Swipe Type'];
+    const iStatus  = COL['Status'];
+
+    function parseSwipe(val) {
+      // attendance.py: pd.to_datetime(ghr["Punch Time"], errors="coerce")
+      // GreatHR "Swipe Date" values can be:
+      //   "30 May 2026 09:35:06"  (string)
+      //   Excel datetime serial   (number)
+      if (!val && val !== 0) return { date: null, time: null };
+
+      if (typeof val === 'string') {
+        const s = val.trim();
+        // "30 May 2026 09:35:06"
+        const months = {Jan:'01',Feb:'02',Mar:'03',Apr:'04',May:'05',Jun:'06',
+                        Jul:'07',Aug:'08',Sep:'09',Oct:'10',Nov:'11',Dec:'12'};
+        const m1 = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})\s+(\d{2}:\d{2}(?::\d{2})?)/);
+        if (m1) {
+          const mon = months[m1[2].slice(0,3)] || '01';
+          const date = `${m1[3]}-${mon}-${String(m1[1]).padStart(2,'0')}`;
+          const time = m1[4].length === 5 ? m1[4]+':00' : m1[4];
+          return { date, time };
+        }
+        // "YYYY-MM-DD HH:MM:SS"
+        const m2 = s.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}(?::\d{2})?)/);
+        if (m2) return { date: m2[1], time: m2[2].length === 5 ? m2[2]+':00' : m2[2] };
+      }
+
+      if (typeof val === 'number') {
+        // Excel datetime serial
+        const intPart = Math.floor(val);
+        const frac    = val - intPart;
+        const d = new Date(Math.round((intPart - 25569) * 86400 * 1000));
+        const y  = d.getUTCFullYear();
+        const mo = String(d.getUTCMonth()+1).padStart(2,'0');
+        const dy = String(d.getUTCDate()).padStart(2,'0');
+        const date = `${y}-${mo}-${dy}`;
+        const totalSec = Math.round(frac * 86400);
+        const h = Math.floor(totalSec / 3600) % 24;
+        const m = Math.floor((totalSec % 3600) / 60);
+        const s = totalSec % 60;
+        const time = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+        return { date, time };
+      }
+      return { date: null, time: null };
+    }
+
+    const records = [];
+    for (let r = 1; r < raw.length; r++) {
+      const row = raw[r];
+      if (!row) continue;
+      const empNo   = String(row[iEmpNo]||'').trim();
+      const empName = String(row[iEmpName]||'').trim();
+      if (!empName) continue; // attendance.py: dropna(subset=["Name"])
+      const { date, time } = parseSwipe(row[iSwipe]);
+      if (!date) continue; // attendance.py: dropna(subset=["Punch Time"])
+
+      records.push({
+        'Employee No': empNo || '',  // attendance.py: fillna("").astype(str).str.strip()
+        'Name':        empName,
+        'Date':        date,
+        'Punch Time':  time,         // "HH:MM:SS"
+        'Shift':       String(row[iShift]||'').trim(),
+        'Door/Address': String(row[iDoor]||'').trim(),
+        'Location Type': String(row[iLocType]||'').trim(),
+        'Swipe Type':  String(row[iSwType]||'').trim(),
+        'Status':      String(row[iStatus]||'').trim()
+      });
+    }
+    return records;
+  }
+
+  // ── build_summary — mirrors attendance.py build_summary(src, id_col) ──────
+  // Groups by (Name, id_col, Date), sorts times, picks first/last, computes hours.
+  // Output fields: Name, <id_col>, Date, First_In, Last_Out, Hours, Total_Punches
+  function buildSummary(records, idCol) {
+    // Group
+    const groups = {};
+    records.forEach(r => {
+      const key = `${r['Name']}||${r[idCol]}||${r['Date']}`;
+      if (!groups[key]) groups[key] = { name: r['Name'], uid: r[idCol], date: r['Date'], times: [] };
+      groups[key].times.push(r['Punch Time']);
+    });
+
+    const rows = [];
+    Object.values(groups).forEach(g => {
+      const times = g.times.slice().sort(); // lexicographic sort on "HH:MM:SS" works fine
+      const firstIn  = times[0].slice(0,5);   // "HH:MM"
+      const lastOut  = times[times.length-1].slice(0,5);
+      // attendance.py: hours = round((times[-1] - times[0]).total_seconds() / 3600, 2)
+      const toSec = t => { const [h,m,s] = t.split(':').map(Number); return h*3600+m*60+(s||0); };
+      const hours = Math.round((toSec(times[times.length-1]) - toSec(times[0])) / 3600 * 100) / 100;
+      const row = {
+        'Name':          g.name,
+        'Date':          g.date,
+        'First_In':      firstIn,
+        'Last_Out':      lastOut,
+        'Hours':         hours,
+        'Total_Punches': times.length
+      };
+      row[idCol] = g.uid;
+      rows.push(row);
+    });
+    return rows;
+  }
+
+  // ── build_punches — mirrors attendance.py build_punches(src, id_col, mode_label, device_col) ─
+  // Output fields: Name, <id_col>, Date, Time, Seq, Mode, Device
+  function buildPunches(records, idCol, modeLabel, deviceCol) {
+    const groups = {};
+    records.forEach(r => {
+      const key = `${r['Name']}||${r[idCol]}||${r['Date']}`;
+      if (!groups[key]) groups[key] = { name: r['Name'], uid: r[idCol], date: r['Date'], entries: [] };
+      groups[key].entries.push(r);
+    });
+
+    const rows = [];
+    Object.values(groups).forEach(g => {
+      // Sort by Punch Time
+      g.entries.sort((a,b) => a['Punch Time'].localeCompare(b['Punch Time']));
+      g.entries.forEach((e, i) => {
+        let device = '';
+        if (modeLabel === 'greathr') {
+          device = 'Great HR';
+        } else if (deviceCol && e[deviceCol] !== undefined) {
+          const raw = String(e[deviceCol]||'').trim();
+          device = ['nan','NaT','NaN',''].includes(raw) ? '' : raw;
+        }
+        const row = {
+          'Name':   g.name,
+          'Date':   g.date,
+          'Time':   e['Punch Time'],   // "HH:MM:SS" — attendance.py: t.strftime("%H:%M:%S")
+          'Seq':    i + 1,
+          'Mode':   modeLabel,
+          'Device': device
+        };
+        row[idCol] = g.uid;
+        rows.push(row);
+      });
+    });
+    return rows;
+  }
+
+  // ── Main process ──────────────────────────────────────────────────────────
+  async function processFiles() {
+    document.getElementById('progressWrap').classList.add('show');
+    processBtn.disabled = true;
+    document.getElementById('errorMsg').classList.remove('show');
+
+    try {
+      // Step 1 — read biometric
+      setStep(1,'active'); setProgress(5,'Reading Biometric file…');
+      const bioAB = await readFile(bioInput.files[0]);
+
+      // Step 2 — parse & split face/fp
+      setStep(1,'done'); setStep(2,'active'); setProgress(20,'Splitting Face vs Fingerprint…');
+      await tick();
+      const { faceRecords, fpRecords } = parseBiometric(bioAB);
+
+      // Step 3 — read GreatHR
+      setStep(2,'done'); setStep(3,'active'); setProgress(40,'Reading GreatHR file…');
+      const ghrAB = await readFile(ghrInput.files[0]);
+
+      setStep(3,'done'); setStep(4,'active'); setProgress(55,'Building daily summaries…');
+      await tick();
+      const ghrRecords = parseGreatHR(ghrAB);
+
+      // Step 4 — build_summary for each source (mirrors attendance.py)
+      const faceSummary = buildSummary(faceRecords, 'User ID');
+      const fpSummary   = buildSummary(fpRecords,   'User ID');
+      const ghrSummary  = buildSummary(ghrRecords,  'Employee No');
+
+      // Step 5 — build_punches for each source, then concat (mirrors attendance.py)
+      setStep(4,'done'); setStep(5,'active'); setProgress(72,'Building punch details…');
+      await tick();
+      const facePunches = buildPunches(faceRecords, 'User ID',     'face',        'Device/Source Detail');
+      const fpPunches   = buildPunches(fpRecords,   'User ID',     'fingerprint', 'Device/Source Detail');
+      const ghrPunches  = buildPunches(ghrRecords,  'Employee No', 'greathr',     null);
+      const punchDetails = [...facePunches, ...fpPunches, ...ghrPunches];
+
+      // Step 6 — merge new data into existing localStorage (no overwrite)
+      setStep(5,'done'); setStep(6,'active'); setProgress(88,'Merging with existing data…');
+      await tick();
+
+      // ── mergeSummary: unique key = Name + Date
+      // New record replaces existing if same Name+Date, otherwise append.
+      function mergeSummary(existingRaw, incoming) {
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
+        const map = {};
+        existing.forEach(r => { map[`${r.Name}||${r.Date}`] = r; });
+        incoming.forEach(r => { map[`${r.Name}||${r.Date}`] = r; }); // overwrite same day
+        return Object.values(map);
+      }
+
+      // ── mergePunches: unique key = Name + Date + Time + Mode
+      // Append only if that exact punch doesn't already exist.
+      function mergePunches(existingRaw, incoming) {
+        const existing = existingRaw ? JSON.parse(existingRaw) : [];
+        const seen = new Set(existing.map(r => `${r.Name}||${r.Date}||${r.Time}||${r.Mode}`));
+        const toAdd = incoming.filter(r => !seen.has(`${r.Name}||${r.Date}||${r.Time}||${r.Mode}`));
+        return [...existing, ...toAdd];
+      }
+
+      const mergedFace    = mergeSummary(localStorage.getItem('att_face_summary'),        faceSummary);
+      const mergedFP      = mergeSummary(localStorage.getItem('att_fingerprint_summary'), fpSummary);
+      const mergedGHR     = mergeSummary(localStorage.getItem('att_ghr_summary'),         ghrSummary);
+      const mergedPunches = mergePunches(localStorage.getItem('att_punch_details'),       punchDetails);
+
+      // These 4 keys MUST match what att-data.js intercepts
+      localStorage.setItem('att_face_summary',        JSON.stringify(mergedFace));
+      localStorage.setItem('att_fingerprint_summary', JSON.stringify(mergedFP));
+      localStorage.setItem('att_ghr_summary',         JSON.stringify(mergedGHR));
+      localStorage.setItem('att_punch_details',       JSON.stringify(mergedPunches));
+      localStorage.setItem('att_last_updated',        new Date().toISOString());
+
+      setStep(6,'done'); setProgress(100,'Done!');
+      await tick(400);
+
+      const prevFace = faceSummary.length, prevFP = fpSummary.length;
+      console.log(`✅ Face        : ${faceSummary.length} new day-records → ${mergedFace.length} total | ${facePunches.length} new punches`);
+      console.log(`✅ Fingerprint : ${fpSummary.length} new day-records → ${mergedFP.length} total | ${fpPunches.length} new punches`);
+      console.log(`✅ Great HR    : ${ghrSummary.length} new day-records → ${mergedGHR.length} total | ${ghrPunches.length} new punches`);
+      console.log(`✅ punch_details: ${punchDetails.length} new events → ${mergedPunches.length} total`);
+
+      window.location.href = 'index.html';
+
+    } catch (err) {
+      setProgress(0,'Error');
+      showError('Error: ' + err.message);
+      processBtn.disabled = false;
+      console.error(err);
+    }
+  }
+  </script>
+</body>
+</html>
