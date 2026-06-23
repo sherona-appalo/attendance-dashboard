@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Upload — Attendance</title>
+  <script>
+  (function(){
+    const t = localStorage.getItem('attendance-theme');
+    if (t === 'light') document.documentElement.setAttribute('data-theme', 'light');
+  })();
+</script>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -11,6 +17,7 @@
       --accent: #6c63ff; --accent2: #4ecca3; --text: #e8eaf0; --muted: #7b80a0;
       --danger: #ff5c6c; --success: #4ecca3; --radius: 12px;
     }
+    [data-theme="light"]{--bg:#f3f4f8;--surface:#ffffff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--input-bg:#f9fafb;}
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif;
       min-height: 100vh; display: flex; flex-direction: column; align-items: center;

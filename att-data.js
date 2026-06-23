@@ -1,5 +1,4 @@
 /**
- * att-data.js
  * Intercepts fetch() calls for the 4 JSON files and serves from localStorage.
  * Keys written by upload.html match exactly what is intercepted here.
  *
@@ -8,10 +7,6 @@
  *   att_fingerprint_summary → fingerprint_summary.json
  *   att_ghr_summary         → greathr_summary.json
  *   att_punch_details       → punch_details.json
- *
- * Add <script src="att-data.js"></script> to the <head> of:
- *   index.html, reports.html, employee.html, dayview.html
- * That is the ONLY change needed to those files.
  */
 (function () {
   const MAP = {
