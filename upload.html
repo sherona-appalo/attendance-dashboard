@@ -398,8 +398,12 @@
   // ── Read existing data from Firestore ─────────────────────────────────────
   async function readExisting(key) {
     try {
-      const doc = await db.collection('attendance').doc(key).get();
-      if (doc.exists) return JSON.parse(doc.data().data);
+      const chunks = await db.collection('attendance').doc(key).collection('chunks').orderBy('part').get();
+if (!chunks.empty) {
+    let all = [];
+    chunks.forEach(d => { all = all.concat(JSON.parse(d.data().data)); });
+    return all;
+}
     } catch(e) {}
     // Fall back to localStorage if Firestore fails
     const raw = localStorage.getItem(key);
@@ -409,11 +413,27 @@
   // ── Write to Firestore + localStorage ─────────────────────────────────────
   async function saveToCloud(key, data) {
     const json = JSON.stringify(data);
-    // Always cache locally
     try { localStorage.setItem(key, json); } catch(e) {}
-    // Write to Firestore
-    await db.collection('attendance').doc(key).set({ data: json, updatedAt: new Date().toISOString() });
-  }
+
+    // Split into chunks of 500 records each
+    const CHUNK = 500;
+    const batch = db.batch();
+    // Delete old chunks first
+    const old = await db.collection('attendance').doc(key).collection('chunks').get();
+    old.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+
+    const chunks = [];
+    for (let i = 0; i < data.length; i += CHUNK) {
+        chunks.push(data.slice(i, i + CHUNK));
+    }
+    const b2 = db.batch();
+    chunks.forEach((chunk, i) => {
+        const ref = db.collection('attendance').doc(key).collection('chunks').doc(String(i));
+        b2.set(ref, { data: JSON.stringify(chunk), part: i });
+    });
+    await b2.commit();
+}
 
   // ── Main process ──────────────────────────────────────────────────────────
   async function processFiles() {
