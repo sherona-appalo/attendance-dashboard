@@ -46,12 +46,12 @@
     const db = getDb();
     if (!db) return null;
     try {
-      const doc = await db.collection('attendance').doc(key).get();
-      if (!doc.exists) return null;
-      const raw = doc.data().data;
-      // Cache locally so the page works offline after first load
-      try { localStorage.setItem(key, raw); } catch(e){}
-      return JSON.parse(raw);
+      const chunks = await db.collection('attendance').doc(key).collection('chunks').orderBy('part').get();
+      if (chunks.empty) return null;
+      let all = [];
+      chunks.forEach(d => { all = all.concat(JSON.parse(d.data().data)); });
+      try { localStorage.setItem(key, JSON.stringify(all)); } catch(e){}
+      return all;
     } catch (e) {
       console.warn('Firestore read failed, falling back to localStorage:', e.message);
       return null;
