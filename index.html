@@ -93,6 +93,7 @@ tbody tr:hover .badge{
     transform:translateY(-1px);
 }
 .emp-id-col{font-size:13px;color:var(--muted);font-family:'Space Grotesk',sans-serif;}
+.team-pill{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;background:var(--pill-bg);color:var(--pill-txt);white-space:nowrap;}
 .date-val{color:var(--muted);font-size:14px;}
 .t-in{color:var(--green);font-weight:600;}
 .t-out{color:var(--accent2);font-weight:600;}
@@ -207,6 +208,10 @@ tbody tr:hover .badge{
   <label>From</label><input type="date" id="dateFrom" onchange="render()">
   <label>To</label>  <input type="date" id="dateTo"   onchange="render()">
   <div class="sep"></div>
+  <select id="teamFilter" onchange="render()">
+    <option value="">All Teams</option>
+  </select>
+  <div class="sep"></div>
   <select id="sortBy" onchange="render()">
     <option value="date_desc">Date — Newest First</option>
     <option value="date_asc">Date — Oldest First</option>
@@ -227,12 +232,12 @@ tbody tr:hover .badge{
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Emp ID</th><th>Employee</th><th>Date</th>
+        <th>#</th><th>Emp ID</th><th>Employee</th><th>Team</th><th>Date</th>
         <th>First In</th><th>Last Out</th><th>Hours</th><th>Punches</th><th>Status</th>
       </tr>
     </thead>
     <tbody id="tbody">
-      <tr><td colspan="9"><div class="no-data">Loading records…</div></td></tr>
+      <tr><td colspan="10"><div class="no-data">Loading records…</div></td></tr>
     </tbody>
   </table>
   <div class="tfoot-row">
@@ -298,6 +303,7 @@ tbody tr:hover .badge{
 
 <script>
 let faceData=[], fpData=[], ghrData=[], punchData=[];
+let teamLookup = {byId:{}, byName:{}};
 let currentMode = "face";
 let panelContext = null; // {name, date, uid}
 
@@ -305,14 +311,24 @@ let panelContext = null; // {name, date, uid}
 function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.body.style.transition="background .25s,color .25s";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
 const st=localStorage.getItem("attendance-theme");
 if(st){document.documentElement.setAttribute("data-theme",st);document.getElementById("themeToggle").checked=st==="dark";}
+
+/* ── Team filter population ── */
+function populateTeamFilter(){
+  const sel = document.getElementById("teamFilter");
+  const teams = window.AttData ? window.AttData.listTeams(teamLookup) : [];
+  sel.innerHTML = `<option value="">All Teams</option>` + teams.map(t=>`<option value="${t}">${t}</option>`).join("");
+}
+
 /* ── Load data ── */
 Promise.all([
   fetch("face_summary.json").then(r=>r.json()),
   fetch("fingerprint_summary.json").then(r=>r.json()),
   fetch("greathr_summary.json").then(r=>r.json()),
   fetch("punch_details.json").then(r=>r.json()),
-]).then(([f,fp,g,pd])=>{
-  faceData=f; fpData=fp; ghrData=g; punchData=pd;
+  window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
+]).then(([f,fp,g,pd,tl])=>{
+  faceData=f; fpData=fp; ghrData=g; punchData=pd; teamLookup=tl;
+  populateTeamFilter();
   const time = new Date().toLocaleTimeString("en-IN",{
     hour:"2-digit",
     minute:"2-digit"
@@ -325,7 +341,7 @@ document.getElementById("updated").innerHTML =
 </div>`;
   render();
 }).catch(()=>{
-  document.getElementById("tbody").innerHTML=`<tr><td colspan="9"><div class="no-data">⚠ Could not load JSON files<small>Run python attendance.py then python -m http.server 8000</small></div></td></tr>`;
+  document.getElementById("tbody").innerHTML=`<tr><td colspan="10"><div class="no-data">⚠ Could not load JSON files<small>Run python attendance.py then python -m http.server 8000</small></div></td></tr>`;
   document.getElementById("count-pill").textContent="Error";
 });
 
@@ -409,6 +425,7 @@ function render(){
   const search   = document.getElementById("search").value.toLowerCase().trim();
   const dateFrom = document.getElementById("dateFrom").value;
   const dateTo   = document.getElementById("dateTo").value;
+  const teamSel  = document.getElementById("teamFilter").value;
   const sortBy   = document.getElementById("sortBy").value;
 
   let data = currentData().filter(r=>{
@@ -418,15 +435,22 @@ function render(){
     if(search && !name.includes(search) && !uid.includes(search)) return false;
     if(dateFrom && date<dateFrom) return false;
     if(dateTo   && date>dateTo)   return false;
+    if(teamSel){
+      const uidRaw = r["User ID"]||r["Employee No"]||"";
+      const team = window.AttData ? window.AttData.getTeam(teamLookup, uidRaw, r.Name) : "";
+      if(team !== teamSel) return false;
+    }
     return true;
   });
 
-  // Enrich each record with cross-mode times before sorting
+  // Enrich each record with cross-mode times and Team before sorting
   const enriched = data.map(r => {
     const date = (r.Date||"").toString().slice(0,10);
     const times = getCrossModeTimes(r.Name, date, currentMode);
+    const uidRaw = r["User ID"]||r["Employee No"]||"";
+    const team = window.AttData ? window.AttData.getTeam(teamLookup, uidRaw, r.Name) : "";
     return { ...r, _firstIn: times.firstIn, _lastOut: times.lastOut, _hours: times.hours,
-             _totalPunches: times.totalPunches, _modePunches: times.modePunches };
+             _totalPunches: times.totalPunches, _modePunches: times.modePunches, _team: team };
   });
 
   enriched.sort((a,b)=>{
@@ -449,7 +473,7 @@ shown===total
 
   const tbody=document.getElementById("tbody");
   if(!enriched.length){
-    tbody.innerHTML=`<tr><td colspan="9"><div class="no-data">No records match your filters<small>Try adjusting the date range or search term</small></div></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="10"><div class="no-data">No records match your filters<small>Try adjusting the date range or search term</small></div></td></tr>`;
     return;
   }
 
@@ -460,10 +484,12 @@ shown===total
     const safeDate=(r.Date||"").toString().slice(0,10);
     // Punch display: modePunches / totalPunches
     const pnchHtml = `<span class="pnch-mode">${r._modePunches}</span><span class="pnch-sep">/</span><span class="pnch-total">${r._totalPunches}</span>`;
+    const teamHtml = r._team ? `<span class="team-pill">${r._team}</span>` : `<span style="color:var(--muted)">—</span>`;
     return`<tr onclick="openPanel('${(r.Name||"").replace(/'/g,"\\'")}','${safeDate}','${(uid).toString().replace(/'/g,"\\'")}')">
       <td>${i+1}</td>
       <td class="emp-id-col">${uid||"—"}</td>
       <td><div class="emp">${r.Name||"—"}</div></td>
+      <td>${teamHtml}</td>
       <td><div class="date-val">${formatDate(r.Date)}</div></td>
       <td>${(()=>{const s=getLoginStatus(r._firstIn);return s?`<span style="color:${s.color};font-weight:600;cursor:default" title="${s.tooltip}">${r._firstIn}</span>`:`<span style="color:var(--muted)">—</span>`;})()}</td>
       <td class="t-out">${r._lastOut}</td>
@@ -563,6 +589,7 @@ function clearFilters(){
   document.getElementById("search").value="";
   document.getElementById("dateFrom").value="";
   document.getElementById("dateTo").value="";
+  document.getElementById("teamFilter").value="";
   document.getElementById("sortBy").value="date_desc";
   render();
 }
@@ -577,5 +604,3 @@ function clearFilters(){
 </footer>
 </body>
 </html>
-
-

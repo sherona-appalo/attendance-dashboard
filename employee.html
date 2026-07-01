@@ -62,6 +62,8 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .profile-left{}
 .profile-name{font-family:'Space Grotesk',sans-serif;font-size:24px;font-weight:700;}
 .profile-id{font-size:13px;color:var(--muted);margin-top:4px;font-family:'Space Grotesk',sans-serif;}
+.profile-team{margin-top:8px;}
+.team-pill{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;background:var(--pill-bg);color:var(--pill-txt);}
 .profile-modes{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;}
 .mode-pill{display:inline-block;padding:4px 12px;border-radius:4px;font-size:12px;font-weight:600;}
 .mode-face{background:rgba(108,99,255,.15);color:#a89fff;}
@@ -247,6 +249,7 @@ tbody tr:hover .badge{
     <div class="profile-left">
       <div class="profile-name" id="pf-name">—</div>
       <div class="profile-id"   id="pf-id">—</div>
+      <div class="profile-team" id="pf-team"></div>
       <div class="profile-modes" id="pf-modes"></div>
     </div>
     <button class="btn-clear-emp" onclick="clearEmployee()">✕ Clear</button>
@@ -343,6 +346,7 @@ tbody tr:hover .badge{
 <script>
 /* ── State ── */
 let faceData=[], fpData=[], ghrData=[], punchData=[];
+let teamLookup={byId:{}, byName:{}};
 let allEmployees=[];
 let selectedEmp=null;
 let acFocusIdx=-1;
@@ -359,8 +363,9 @@ Promise.all([
   fetch("fingerprint_summary.json").then(r=>r.json()),
   fetch("greathr_summary.json").then(r=>r.json()),
   fetch("punch_details.json").then(r=>r.json()),
-]).then(([f,fp,g,pd])=>{
-  faceData=f; fpData=fp; ghrData=g; punchData=pd;
+  window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
+]).then(([f,fp,g,pd,tl])=>{
+  faceData=f; fpData=fp; ghrData=g; punchData=pd; teamLookup=tl;
   buildEmployeeList();
   document.getElementById("search-hint").textContent=`${allEmployees.length} employees loaded — start typing to search`;
   document.getElementById("no-sel").style.display="block";
@@ -386,7 +391,11 @@ function buildEmployeeList(){
   add(faceData,"User ID","face");
   add(fpData,"User ID","fp");
   add(ghrData,"Employee No","ghr");
-  allEmployees=Object.values(map).map(e=>({...e,ids:[...e.ids]})).sort((a,b)=>a.name.localeCompare(b.name));
+  allEmployees=Object.values(map).map(e=>{
+    const ids=[...e.ids];
+    const team = window.AttData ? window.AttData.getTeam(teamLookup, ids[0]||"", e.name) : "";
+    return {...e, ids, team};
+  }).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
 /* ── Autocomplete ── */
@@ -485,6 +494,7 @@ function renderProfile(){
   const e=selectedEmp;
   document.getElementById("pf-name").textContent=e.name;
   document.getElementById("pf-id").textContent=e.ids.length?`ID: ${e.ids.join(" / ")}`:"No employee ID on record";
+  document.getElementById("pf-team").innerHTML=e.team?`<span class="team-pill">${e.team}</span>`:`<span style="font-size:12px;color:var(--muted)">No Team assigned</span>`;
   const pills=[];
   if(e.hasFace) pills.push(`<span class="mode-pill mode-face">👤 Face</span>`);
   if(e.hasFP)   pills.push(`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`);
@@ -774,7 +784,7 @@ function getEmpExportRows() {
     return b.date.localeCompare(a.date);
   });
 
-  const headers = ["Emp ID","Name","Date","First In","Last Out","Hours","Total Punches","Status","Sources"];
+  const headers = ["Emp ID","Name","Team","Date","First In","Last Out","Hours","Total Punches","Status","Sources"];
   const dataRows = rows.map(row => {
     const uid = selectedEmp.ids[0]||"";
     const firstIn = crossModeFirstIn(name, row.date);
@@ -786,7 +796,7 @@ function getEmpExportRows() {
     const status = hours === "—" ? "—" : hoursNum >= full ? "Full day" : hoursNum >= half ? "Half day" : "Short";
     const punches = countPunches(name, row.date);
     const sources = [row.face?"Face":"", row.fp?"Fingerprint":"", row.ghr?"Great HR":""].filter(Boolean).join(", ");
-    return [uid, name, row.date, firstIn, lastOut, hours === "—" ? "" : hours, punches, status, sources];
+    return [uid, name, selectedEmp.team||"", row.date, firstIn, lastOut, hours === "—" ? "" : hours, punches, status, sources];
   });
   return { headers, dataRows };
 }

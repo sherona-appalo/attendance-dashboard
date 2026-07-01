@@ -31,6 +31,9 @@
     h1{font-family:'Space Grotesk',sans-serif;font-size:28px;font-weight:700;color:var(--text);margin-bottom:8px;text-align:center;}
     .subtitle{color:var(--muted);font-size:14px;text-align:center;margin-bottom:40px;max-width:420px;line-height:1.6;}
     .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:32px;width:100%;max-width:520px;}
+    .card + .card{margin-top:20px;}
+    .card-title{font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;margin-bottom:4px;}
+    .card-hint{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.5;}
     .upload-zone{border:2px dashed var(--border);border-radius:10px;padding:28px 20px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative;margin-bottom:16px;}
     .upload-zone:hover,.upload-zone.dragover{border-color:var(--accent);background:rgba(108,99,255,.06);}
     .upload-zone.done{border-color:var(--success);background:rgba(78,204,163,.06);}
@@ -44,6 +47,7 @@
     .divider{height:1px;background:var(--border);margin:24px 0;}
     .btn{width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:10px;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;cursor:pointer;transition:opacity .2s,transform .1s;display:flex;align-items:center;justify-content:center;gap:10px;}
     .btn:hover{opacity:.9;}.btn:active{transform:scale(.98);}.btn:disabled{opacity:.4;cursor:not-allowed;transform:none;}
+    .btn-secondary{background:var(--surface2);color:var(--text);border:1px solid var(--border);}
     .progress-wrap{display:none;margin-top:20px;}
     .progress-wrap.show{display:block;}
     .progress-label{font-size:12px;color:var(--muted);margin-bottom:8px;display:flex;justify-content:space-between;}
@@ -113,12 +117,41 @@
         <div class="step" id="step4"><div class="step-dot"></div>Building daily summaries</div>
         <div class="step" id="step5"><div class="step-dot"></div>Building punch details</div>
         <div class="step" id="step6"><div class="step-dot"></div>Merging with existing data</div>
-        <div class="step" id="step7"><div class="step-dot"></div>Syncing to cloud</div>
+        <div class="step" id="step7"><div class="step-dot"></div>Removing records older than 6 months</div>
+        <div class="step" id="step8"><div class="step-dot"></div>Syncing to cloud</div>
       </div>
     </div>
 
     <div class="sync-status" id="syncStatus"></div>
     <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Employee Master</div>
+    <div class="card-hint">Only upload when an employee joins, changes team, or their info is updated. Not required for normal attendance imports. New data is merged into the existing Employee Master — no one is ever removed.</div>
+
+    <div class="upload-zone" id="empZone">
+      <input type="file" id="empFile" accept=".xlsx,.xls">
+      <span class="upload-icon">🗂️</span>
+      <div class="upload-label">Employee Master</div>
+      <div class="upload-hint">Employee ID · Employee Name · Team · .xlsx</div>
+      <div class="file-name" id="empFileName"></div>
+    </div>
+
+    <button class="btn btn-secondary" id="empBtn" disabled onclick="processEmployeeMaster()">
+      <span>Merge Employee Master to Cloud</span>
+    </button>
+
+    <div class="progress-wrap" id="empProgressWrap">
+      <div class="progress-label">
+        <span id="empProgressLabel">Processing…</span>
+        <span id="empProgressPct">0%</span>
+      </div>
+      <div class="progress-bar-bg"><div class="progress-bar" id="empProgressBar"></div></div>
+    </div>
+
+    <div class="sync-status" id="empSyncStatus"></div>
+    <div class="error-msg" id="empErrorMsg"></div>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -127,6 +160,8 @@
   const bioInput   = document.getElementById('bioFile');
   const ghrInput   = document.getElementById('ghrFile');
   const processBtn = document.getElementById('processBtn');
+  const empInput   = document.getElementById('empFile');
+  const empBtn     = document.getElementById('empBtn');
 
   // Check if cloud data exists
   db.collection('attendance').doc('att_face_summary').get().then(doc => {
@@ -142,9 +177,9 @@
     }
   });
 
-  function setupZone(input, zone, nameEl) {
+  function setupZone(input, zone, nameEl, onReady) {
     input.addEventListener('change', () => {
-      if (input.files[0]) { zone.classList.add('done'); nameEl.textContent = '✓ ' + input.files[0].name; checkReady(); }
+      if (input.files[0]) { zone.classList.add('done'); nameEl.textContent = '✓ ' + input.files[0].name; onReady(); }
     });
     zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
     zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
@@ -153,12 +188,13 @@
       const file = e.dataTransfer.files[0];
       if (file) {
         const dt = new DataTransfer(); dt.items.add(file); input.files = dt.files;
-        zone.classList.add('done'); nameEl.textContent = '✓ ' + file.name; checkReady();
+        zone.classList.add('done'); nameEl.textContent = '✓ ' + file.name; onReady();
       }
     });
   }
-  setupZone(bioInput, document.getElementById('bioZone'), document.getElementById('bioFileName'));
-  setupZone(ghrInput, document.getElementById('ghrZone'), document.getElementById('ghrFileName'));
+  setupZone(bioInput, document.getElementById('bioZone'), document.getElementById('bioFileName'), checkReady);
+  setupZone(ghrInput, document.getElementById('ghrZone'), document.getElementById('ghrFileName'), checkReady);
+  setupZone(empInput, document.getElementById('empZone'), document.getElementById('empFileName'), () => { empBtn.disabled = !empInput.files[0]; });
   function checkReady() { processBtn.disabled = !(bioInput.files[0] && ghrInput.files[0]); }
 
   function setStep(n, state) { document.getElementById('step'+n).className = 'step '+state; }
@@ -170,6 +206,17 @@
   function showError(msg) { const el = document.getElementById('errorMsg'); el.textContent = msg; el.classList.add('show'); }
   function setSyncStatus(state, msg) {
     const el = document.getElementById('syncStatus');
+    el.className = 'sync-status ' + state;
+    el.textContent = msg;
+  }
+  function setEmpProgress(pct, label) {
+    document.getElementById('empProgressBar').style.width = pct+'%';
+    document.getElementById('empProgressPct').textContent = pct+'%';
+    if (label) document.getElementById('empProgressLabel').textContent = label;
+  }
+  function showEmpError(msg) { const el = document.getElementById('empErrorMsg'); el.textContent = msg; el.classList.add('show'); }
+  function setEmpSyncStatus(state, msg) {
+    const el = document.getElementById('empSyncStatus');
     el.className = 'sync-status ' + state;
     el.textContent = msg;
   }
@@ -395,6 +442,18 @@
     return [...existing, ...toAdd];
   }
 
+  // ── Six-month attendance retention ───────────────────────────────────────
+  // Removes attendance rows older than 6 months. Never applied to Employee Master.
+  function sixMonthsAgoStr() {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 6);
+    const y = d.getFullYear(), mo = String(d.getMonth()+1).padStart(2,'0'), dy = String(d.getDate()).padStart(2,'0');
+    return `${y}-${mo}-${dy}`;
+  }
+  function applyRetention(rows, cutoff) {
+    return rows.filter(r => r.Date && r.Date >= cutoff);
+  }
+
   // ── Read existing data from Firestore ─────────────────────────────────────
   async function readExisting(key) {
     try {
@@ -435,7 +494,7 @@ if (!chunks.empty) {
     await b2.commit();
 }
 
-  // ── Main process ──────────────────────────────────────────────────────────
+  // ── Main process (Biometric + GreatHR — unchanged workflow, now with retention) ──
   async function processFiles() {
     document.getElementById('progressWrap').classList.add('show');
     processBtn.disabled = true;
@@ -446,28 +505,28 @@ if (!chunks.empty) {
       setStep(1,'active'); setProgress(5,'Reading Biometric file…');
       const bioAB = await readFile(bioInput.files[0]);
 
-      setStep(1,'done'); setStep(2,'active'); setProgress(15,'Splitting Face vs Fingerprint…');
+      setStep(1,'done'); setStep(2,'active'); setProgress(13,'Splitting Face vs Fingerprint…');
       await tick();
       const { faceRecords, fpRecords } = parseBiometric(bioAB);
 
-      setStep(2,'done'); setStep(3,'active'); setProgress(28,'Reading GreatHR file…');
+      setStep(2,'done'); setStep(3,'active'); setProgress(25,'Reading GreatHR file…');
       const ghrAB = await readFile(ghrInput.files[0]);
 
-      setStep(3,'done'); setStep(4,'active'); setProgress(40,'Building daily summaries…');
+      setStep(3,'done'); setStep(4,'active'); setProgress(36,'Building daily summaries…');
       await tick();
       const ghrRecords = parseGreatHR(ghrAB);
       const faceSummary = buildSummary(faceRecords, 'User ID');
       const fpSummary   = buildSummary(fpRecords,   'User ID');
       const ghrSummary  = buildSummary(ghrRecords,  'Employee No');
 
-      setStep(4,'done'); setStep(5,'active'); setProgress(55,'Building punch details…');
+      setStep(4,'done'); setStep(5,'active'); setProgress(48,'Building punch details…');
       await tick();
       const facePunches  = buildPunches(faceRecords, 'User ID',     'face',        'Device/Source Detail');
       const fpPunches    = buildPunches(fpRecords,   'User ID',     'fingerprint', 'Device/Source Detail');
       const ghrPunches   = buildPunches(ghrRecords,  'Employee No', 'greathr',     null);
       const punchDetails = [...facePunches, ...fpPunches, ...ghrPunches];
 
-      setStep(5,'done'); setStep(6,'active'); setProgress(68,'Merging with existing data…');
+      setStep(5,'done'); setStep(6,'active'); setProgress(60,'Merging with existing data…');
       await tick();
       // Read existing data from cloud first
       const [exFace, exFP, exGHR, exPunches] = await Promise.all([
@@ -476,12 +535,20 @@ if (!chunks.empty) {
         readExisting('att_ghr_summary'),
         readExisting('att_punch_details'),
       ]);
-      const mergedFace    = mergeSummary(exFace,    faceSummary);
-      const mergedFP      = mergeSummary(exFP,      fpSummary);
-      const mergedGHR     = mergeSummary(exGHR,     ghrSummary);
-      const mergedPunches = mergePunches(exPunches, punchDetails);
+      let mergedFace    = mergeSummary(exFace,    faceSummary);
+      let mergedFP      = mergeSummary(exFP,      fpSummary);
+      let mergedGHR     = mergeSummary(exGHR,     ghrSummary);
+      let mergedPunches = mergePunches(exPunches, punchDetails);
 
-      setStep(6,'done'); setStep(7,'active'); setProgress(82,'Syncing to cloud…');
+      setStep(6,'done'); setStep(7,'active'); setProgress(72,'Removing records older than 6 months…');
+      await tick();
+      const cutoff = sixMonthsAgoStr();
+      mergedFace    = applyRetention(mergedFace,    cutoff);
+      mergedFP      = applyRetention(mergedFP,      cutoff);
+      mergedGHR     = applyRetention(mergedGHR,     cutoff);
+      mergedPunches = applyRetention(mergedPunches, cutoff);
+
+      setStep(7,'done'); setStep(8,'active'); setProgress(85,'Syncing to cloud…');
       setSyncStatus('syncing', '☁️ Uploading to cloud — please wait…');
       await tick();
 
@@ -492,13 +559,13 @@ if (!chunks.empty) {
         saveToCloud('att_punch_details',       mergedPunches),
       ]);
 
-      setStep(7,'done'); setProgress(100,'Done!');
+      setStep(8,'done'); setProgress(100,'Done!');
       setSyncStatus('synced', `✓ Synced to cloud — all users will see updated data`);
 
-      console.log(`✅ Face        : ${faceSummary.length} new → ${mergedFace.length} total`);
-      console.log(`✅ Fingerprint : ${fpSummary.length} new → ${mergedFP.length} total`);
-      console.log(`✅ Great HR    : ${ghrSummary.length} new → ${mergedGHR.length} total`);
-      console.log(`✅ Punches     : ${punchDetails.length} new → ${mergedPunches.length} total`);
+      console.log(`✅ Face        : ${faceSummary.length} new → ${mergedFace.length} total (after 6-month retention)`);
+      console.log(`✅ Fingerprint : ${fpSummary.length} new → ${mergedFP.length} total (after 6-month retention)`);
+      console.log(`✅ Great HR    : ${ghrSummary.length} new → ${mergedGHR.length} total (after 6-month retention)`);
+      console.log(`✅ Punches     : ${punchDetails.length} new → ${mergedPunches.length} total (after 6-month retention)`);
 
       await tick(1500);
       window.location.href = 'index.html';
@@ -508,6 +575,156 @@ if (!chunks.empty) {
       showError('Error: ' + err.message);
       setSyncStatus('error', '✗ Sync failed — check your internet connection');
       processBtn.disabled = false;
+      console.error(err);
+    }
+  }
+
+  // ── Team name normalization ──────────────────────────────────────────────
+  // Collapses inconsistent casing/spacing/abbreviations into a single canonical Team name.
+  function normalizeTeam(raw) {
+    const s = String(raw||'').trim().toLowerCase().replace(/\s+/g,' ');
+    if (!s) return '';
+    const CANON = {
+      'sales': 'Sales',
+      'operations': 'Operations',
+      'ops': 'Operations',
+      'technical': 'Technical',
+      'tech': 'Technical',
+      'epos': 'EPOS',
+      'shared operations': 'Shared Operations',
+      'shared ops': 'Shared Operations',
+      'shared-ops': 'Shared Operations'
+    };
+    if (CANON[s]) return CANON[s];
+    // Fallback: title-case whatever was given so at least casing is consistent
+    return s.replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  // ── Employee Master parser ───────────────────────────────────────────────
+  function parseEmployeeMaster(ab) {
+    const wb = XLSX.read(ab, { type: 'array', cellDates: false });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) throw new Error('No valid sheet found in Employee Master file.');
+    const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    if (!raw.length) throw new Error('Employee Master file appears empty.');
+
+    const headers = raw[0].map(h => String(h||'').trim());
+    const COL = {}; headers.forEach((h, i) => { COL[h] = i; });
+    const iId = COL['Employee ID'], iName = COL['Employee Name'], iTeam = COL['Team'];
+    if (iId === undefined || iName === undefined || iTeam === undefined)
+      throw new Error(`Missing required columns. Expected "Employee ID", "Employee Name", "Team". Found: ${headers.filter(Boolean).join(', ')}`);
+
+    const rows = [];
+    for (let r = 1; r < raw.length; r++) {
+      const row = raw[r];
+      if (!row) continue;
+      const id = String(row[iId]||'').trim();
+      const name = String(row[iName]||'').trim();
+      if (!id && !name) continue;
+      rows.push({
+        'Employee ID': id,
+        'Employee Name': name,
+        'Team': normalizeTeam(row[iTeam])
+      });
+    }
+    return rows;
+  }
+
+  // ── Employee Master read/merge/save (separate store — never overwritten wholesale) ──
+  async function readEmployeeMaster() {
+    try {
+      const chunks = await db.collection('employeeMaster').doc('master').collection('chunks').orderBy('part').get();
+      if (!chunks.empty) {
+        let all = [];
+        chunks.forEach(d => { all = all.concat(JSON.parse(d.data().data)); });
+        return all;
+      }
+    } catch(e) {}
+    const raw = localStorage.getItem('emp_master');
+    return raw ? JSON.parse(raw) : [];
+  }
+
+  // Merge by Employee ID (fallback Employee Name). Existing employees not present
+  // in the new upload are left completely unchanged. No one is ever removed.
+  function mergeEmployeeMaster(existing, incoming) {
+    const byId = {};
+    const byName = {};
+    existing.forEach(e => {
+      if (e['Employee ID']) byId[e['Employee ID']] = e;
+      else if (e['Employee Name']) byName[e['Employee Name']] = e;
+    });
+    incoming.forEach(inc => {
+      let key = null, bucket = null;
+      if (inc['Employee ID']) { key = inc['Employee ID']; bucket = byId; }
+      else if (inc['Employee Name']) { key = inc['Employee Name']; bucket = byName; }
+      if (!key) return;
+      if (bucket[key]) {
+        // Update existing employee's info (e.g. Team change)
+        bucket[key] = Object.assign({}, bucket[key], inc);
+      } else {
+        // New employee
+        bucket[key] = inc;
+      }
+    });
+    return [...Object.values(byId), ...Object.values(byName)];
+  }
+
+  async function saveEmployeeMaster(data) {
+    const json = JSON.stringify(data);
+    try { localStorage.setItem('emp_master', json); } catch(e) {}
+
+    const CHUNK = 500;
+    const batch = db.batch();
+    const old = await db.collection('employeeMaster').doc('master').collection('chunks').get();
+    old.forEach(d => batch.delete(d.ref));
+    await batch.commit();
+
+    const chunks = [];
+    for (let i = 0; i < data.length; i += CHUNK) chunks.push(data.slice(i, i + CHUNK));
+    const b2 = db.batch();
+    chunks.forEach((chunk, i) => {
+      const ref = db.collection('employeeMaster').doc('master').collection('chunks').doc(String(i));
+      b2.set(ref, { data: JSON.stringify(chunk), part: i });
+    });
+    await b2.commit();
+  }
+
+  // ── Employee Master process (independent of attendance import flow) ─────
+  async function processEmployeeMaster() {
+    document.getElementById('empProgressWrap').classList.add('show');
+    empBtn.disabled = true;
+    document.getElementById('empErrorMsg').classList.remove('show');
+    document.getElementById('empSyncStatus').className = 'sync-status';
+
+    try {
+      setEmpProgress(10, 'Reading Employee Master file…');
+      const ab = await readFile(empInput.files[0]);
+
+      setEmpProgress(35, 'Parsing and normalizing Team names…');
+      await tick();
+      const incoming = parseEmployeeMaster(ab);
+
+      setEmpProgress(55, 'Reading existing Employee Master…');
+      const existing = await readEmployeeMaster();
+
+      setEmpProgress(70, 'Merging (no employees removed)…');
+      await tick();
+      const merged = mergeEmployeeMaster(existing, incoming);
+
+      setEmpProgress(85, 'Syncing to cloud…');
+      setEmpSyncStatus('syncing', '☁️ Uploading Employee Master — please wait…');
+      await tick();
+      await saveEmployeeMaster(merged);
+
+      setEmpProgress(100, 'Done!');
+      setEmpSyncStatus('synced', `✓ Employee Master synced — ${merged.length} employees total`);
+      console.log(`✅ Employee Master: ${incoming.length} in upload → ${merged.length} total after merge`);
+
+    } catch (err) {
+      setEmpProgress(0, 'Error');
+      showEmpError('Error: ' + err.message);
+      setEmpSyncStatus('error', '✗ Sync failed — check your internet connection');
+      empBtn.disabled = false;
       console.error(err);
     }
   }
