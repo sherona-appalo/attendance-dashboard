@@ -73,12 +73,12 @@
 <body>
   <div class="logo">Attendance System</div>
   <h1>Import Centre</h1>
-  <p class="subtitle">Upload Biometric and GreatHR exports. Data syncs to all users instantly via cloud.</p>
+  <p class="subtitle">Upload Biometric and GreatHR files to sync attendance across all users.</p>
 
   <div class="card">
     <div class="cached-banner" id="cachedBanner">
       <span>✓</span>
-      <span><strong>Cloud data available.</strong> Re-upload below to refresh, or open the dashboard.</span>
+      <span><strong>Cloud data is up to date.</strong> Upload new files to sync the latest attendance.</span>
     </div>
     <a href="index.html" class="go-dashboard" id="goDash" style="display:none">→ Open Dashboard</a>
 
@@ -101,7 +101,7 @@
     <div class="divider"></div>
 
     <button class="btn" id="processBtn" disabled onclick="processFiles()">
-      <span>Import & Sync to Cloud</span>
+      <span>Import & Sync</span>
     </button>
 
     <div class="progress-wrap" id="progressWrap">
@@ -128,7 +128,7 @@
 
   <div class="card">
     <div class="card-title">Employee Master</div>
-    <div class="card-hint">Only upload when an employee joins, changes team, or their info is updated. Not required for normal attendance imports. New data is merged into the existing Employee Master — no one is ever removed.</div>
+    <div class="card-hint">Upload only when employee information changes.</div>
 
     <div class="upload-zone" id="empZone">
       <input type="file" id="empFile" accept=".xlsx,.xls">
@@ -139,7 +139,7 @@
     </div>
 
     <button class="btn btn-secondary" id="empBtn" disabled onclick="processEmployeeMaster()">
-      <span>Merge Employee Master to Cloud</span>
+      <span>Update Employee Master</span>
     </button>
 
     <div class="progress-wrap" id="empProgressWrap">
