@@ -70,6 +70,9 @@ table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
 thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
 thead th:first-child{width:52px;text-align:center;}
+thead th.sortable{cursor:pointer;user-select:none;transition:color .15s;}
+thead th.sortable:hover{color:var(--text);}
+.sort-ind{font-size:10px;margin-left:3px;color:var(--accent);letter-spacing:0;}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
 tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--row-hover);}
@@ -211,13 +214,10 @@ tbody tr:hover .badge{
   <select id="teamFilter" onchange="render()">
     <option value="">All Teams</option>
   </select>
-  <div class="sep"></div>
-  <select id="sortBy" onchange="render()">
-    <option value="date_desc">Date — Newest First</option>
-    <option value="date_asc">Date — Oldest First</option>
-    <option value="hours_desc">Hours — Highest First</option>
-    <option value="hours_asc">Hours — Lowest First</option>
+  <select id="monthFilter" onchange="render()">
+    <option value="">All Months</option>
   </select>
+  <div class="sep"></div>
   <button class="btn-clear" onclick="clearFilters()">✕ Clear</button>
   <span class="count-pill" id="count-pill">Loading…</span>
 </div>
@@ -232,8 +232,14 @@ tbody tr:hover .badge{
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Emp ID</th><th>Employee</th><th>Team</th><th>Date</th>
-        <th>First In</th><th>Last Out</th><th>Hours</th><th>Punches</th><th>Status</th>
+        <th>#</th><th>Emp ID</th>
+        <th class="sortable" data-sort="employee" onclick="setSort('employee')">Employee<span class="sort-ind" id="sort-ind-employee"></span></th>
+        <th>Team</th>
+        <th class="sortable" data-sort="date" onclick="setSort('date')">Date<span class="sort-ind" id="sort-ind-date"></span></th>
+        <th>First In</th><th>Last Out</th>
+        <th class="sortable" data-sort="hours" onclick="setSort('hours')">Hours<span class="sort-ind" id="sort-ind-hours"></span></th>
+        <th class="sortable" data-sort="punches" onclick="setSort('punches')">Punches<span class="sort-ind" id="sort-ind-punches"></span></th>
+        <th>Status</th>
       </tr>
     </thead>
     <tbody id="tbody">
@@ -307,6 +313,11 @@ let teamLookup = {byId:{}, byName:{}};
 let currentMode = "face";
 let panelContext = null; // {name, date, uid}
 
+/* ── Sort state (replaces old Sort dropdown) ──
+   column: 'employee' | 'date' | 'hours' | 'punches'
+   direction: 'asc' | 'desc' */
+let sortState = { column: 'date', direction: 'desc' };
+
 /* ── Theme ── */
 function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.body.style.transition="background .25s,color .25s";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
 const st=localStorage.getItem("attendance-theme");
@@ -319,6 +330,28 @@ function populateTeamFilter(){
   sel.innerHTML = `<option value="">All Teams</option>` + teams.map(t=>`<option value="${t}">${t}</option>`).join("");
 }
 
+/* ── Month filter population ──
+   Built from all attendance datasets combined (Face + Fingerprint + GreatHR)
+   so the list of available months doesn't change when switching tabs.
+   Value stored as "YYYY-MM", displayed as "MMM YYYY". */
+function formatMonthLabel(ym){
+  const [y,m] = ym.split("-").map(Number);
+  const d = new Date(y, m-1, 1);
+  return d.toLocaleDateString("en-IN",{month:"short",year:"numeric"});
+}
+function populateMonthFilter(){
+  const sel = document.getElementById("monthFilter");
+  const prevVal = sel.value;
+  const monthSet = new Set();
+  [...faceData, ...fpData, ...ghrData].forEach(r=>{
+    const d = (r.Date||"").toString().slice(0,10);
+    if(d.length===10) monthSet.add(d.slice(0,7));
+  });
+  const months = Array.from(monthSet).sort();
+  sel.innerHTML = `<option value="">All Months</option>` + months.map(ym=>`<option value="${ym}">${formatMonthLabel(ym)}</option>`).join("");
+  if(months.includes(prevVal)) sel.value = prevVal;
+}
+
 /* ── Load data ── */
 Promise.all([
   fetch("face_summary.json").then(r=>r.json()),
@@ -329,6 +362,7 @@ Promise.all([
 ]).then(([f,fp,g,pd,tl])=>{
   faceData=f; fpData=fp; ghrData=g; punchData=pd; teamLookup=tl;
   populateTeamFilter();
+  populateMonthFilter();
   const time = new Date().toLocaleTimeString("en-IN",{
     hour:"2-digit",
     minute:"2-digit"
@@ -420,13 +454,31 @@ function statusBadgeForDate(hoursNum, dateStr) {
   return ["badge-short", "Short"];
 }
 
+/* ── Column sorting (replaces old Sort dropdown) ── */
+function setSort(column){
+  if(sortState.column === column){
+    sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.column = column;
+    sortState.direction = 'asc'; // every column starts Low→High / A→Z / Oldest→Newest on first click
+  }
+  render();
+}
+function updateSortIndicators(){
+  ['employee','date','hours','punches'].forEach(col=>{
+    const el = document.getElementById('sort-ind-'+col);
+    if(!el) return;
+    el.textContent = sortState.column === col ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+}
+
 /* ── Main table render ── */
 function render(){
   const search   = document.getElementById("search").value.toLowerCase().trim();
   const dateFrom = document.getElementById("dateFrom").value;
   const dateTo   = document.getElementById("dateTo").value;
   const teamSel  = document.getElementById("teamFilter").value;
-  const sortBy   = document.getElementById("sortBy").value;
+  const monthSel = document.getElementById("monthFilter").value; // "" or "YYYY-MM"
 
   let data = currentData().filter(r=>{
     const name = (r.Name||"").toLowerCase();
@@ -435,6 +487,7 @@ function render(){
     if(search && !name.includes(search) && !uid.includes(search)) return false;
     if(dateFrom && date<dateFrom) return false;
     if(dateTo   && date>dateTo)   return false;
+    if(monthSel && date.slice(0,7) !== monthSel) return false;
     if(teamSel){
       const uidRaw = r["User ID"]||r["Employee No"]||"";
       const team = window.AttData ? window.AttData.getTeam(teamLookup, uidRaw, r.Name) : "";
@@ -454,13 +507,22 @@ function render(){
   });
 
   enriched.sort((a,b)=>{
-    const da=(a.Date||"").toString(), db=(b.Date||"").toString();
-    if(sortBy==="date_desc")  return db.localeCompare(da);
-    if(sortBy==="date_asc")   return da.localeCompare(db);
-    if(sortBy==="hours_desc"){const na=a._hours==="—"?0:Number(a._hours),nb=b._hours==="—"?0:Number(b._hours);return nb-na;}
-    if(sortBy==="hours_asc"){const na=a._hours==="—"?0:Number(a._hours),nb=b._hours==="—"?0:Number(b._hours);return na-nb;}
-    return db.localeCompare(da);
+    let cmp = 0;
+    if(sortState.column === 'employee'){
+      cmp = (a.Name||"").localeCompare(b.Name||"");
+    } else if(sortState.column === 'date'){
+      const da=(a.Date||"").toString(), db=(b.Date||"").toString();
+      cmp = da.localeCompare(db);
+    } else if(sortState.column === 'hours'){
+      const na=a._hours==="—"?0:Number(a._hours), nb=b._hours==="—"?0:Number(b._hours);
+      cmp = na-nb;
+    } else if(sortState.column === 'punches'){
+      cmp = (a._totalPunches||0) - (b._totalPunches||0);
+    }
+    return sortState.direction === 'desc' ? -cmp : cmp;
   });
+
+  updateSortIndicators();
 
   const total=currentData().length, shown=enriched.length;
   const fmt=n=>n.toLocaleString("en-IN");
@@ -590,7 +652,8 @@ function clearFilters(){
   document.getElementById("dateFrom").value="";
   document.getElementById("dateTo").value="";
   document.getElementById("teamFilter").value="";
-  document.getElementById("sortBy").value="date_desc";
+  document.getElementById("monthFilter").value="";
+  sortState = { column: 'date', direction: 'desc' };
   render();
 }
 </script>

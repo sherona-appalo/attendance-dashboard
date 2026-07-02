@@ -88,6 +88,9 @@ table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
 thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
 thead th:first-child{width:52px;text-align:center;}
+thead th.sortable{cursor:pointer;user-select:none;transition:color .15s;}
+thead th.sortable:hover{color:var(--text);}
+.sort-ind{font-size:10px;margin-left:3px;color:var(--accent);letter-spacing:0;}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
 tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--row-hover);}
@@ -254,6 +257,12 @@ let teamLookup={byId:{}, byName:{}};
 let currentTab="face";
 let panelContext=null;
 
+/* ── Sort state (replaces old hardcoded per-tab sort) ──
+   column: 'employee' | 'hours' | 'punches'
+   direction: 'asc' | 'desc'
+   No Date column exists on this page since only one date is ever shown. */
+let sortState = { column: 'employee', direction: 'asc' };
+
 function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
 const st=localStorage.getItem("attendance-theme");
 if(st){document.documentElement.setAttribute("data-theme",st);document.getElementById("themeToggle").checked=st==="dark";}
@@ -327,6 +336,24 @@ function statusBadgeForDate(hoursNum, dateStr) {
   return ["badge-short", "Short"];
 }
 
+/* ── Column sorting (Employee / Hours / Punches) ── */
+function setSort(column){
+  if(sortState.column === column){
+    sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.column = column;
+    sortState.direction = 'asc'; // every column starts Low→High / A→Z on first click
+  }
+  renderDayTable();
+}
+function updateSortIndicators(){
+  ['employee','hours','punches'].forEach(col=>{
+    const el = document.getElementById('sort-ind-'+col);
+    if(!el) return;
+    el.textContent = sortState.column === col ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+}
+
 function loadDay(){
   const date=document.getElementById("dayPicker").value;
   if(!date)return;
@@ -371,7 +398,14 @@ function loadDay(){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>#</th><th>Emp ID</th><th>Employee</th><th>Team</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Punches</th><th>Status</th></tr></thead>
+        <thead><tr>
+          <th>#</th><th>Emp ID</th>
+          <th class="sortable" data-sort="employee" onclick="setSort('employee')">Employee<span class="sort-ind" id="sort-ind-employee"></span></th>
+          <th>Team</th><th>First In</th><th>Last Out</th>
+          <th class="sortable" data-sort="hours" onclick="setSort('hours')">Hours<span class="sort-ind" id="sort-ind-hours"></span></th>
+          <th class="sortable" data-sort="punches" onclick="setSort('punches')">Punches<span class="sort-ind" id="sort-ind-punches"></span></th>
+          <th>Status</th>
+        </tr></thead>
         <tbody id="day-tbody"></tbody>
       </table>
       <div class="tfoot-row" id="day-foot">—</div>
@@ -421,8 +455,28 @@ function renderDayTable(){
     return getTeamFor(uid, r.Name) === teamSel;
   });
 
-  if(currentTab!=="all") rows.sort((a,b)=>(a.First_In||"").localeCompare(b.First_In||""));
-  else rows.sort((a,b)=>(a.Name||"").localeCompare(b.Name||""));
+  // Enrich with cross-mode times before sorting (filtering always happens before sorting)
+  rows = rows.map(r=>{
+    const uid=r["User ID"]||r["Employee No"]||r.uid||"";
+    const times=getCrossModeTimes(r.Name, date, currentTab==="all"?"all":currentTab);
+    return { ...r, _uid: uid, _firstIn: times.firstIn, _lastOut: times.lastOut,
+             _hours: times.hours, _totalPunches: times.totalPunches, _modePunches: times.modePunches };
+  });
+
+  rows.sort((a,b)=>{
+    let cmp=0;
+    if(sortState.column==="employee"){
+      cmp=(a.Name||"").localeCompare(b.Name||"");
+    } else if(sortState.column==="hours"){
+      const na=a._hours==="—"?0:Number(a._hours), nb=b._hours==="—"?0:Number(b._hours);
+      cmp=na-nb;
+    } else if(sortState.column==="punches"){
+      cmp=(a._totalPunches||0)-(b._totalPunches||0);
+    }
+    return sortState.direction === 'desc' ? -cmp : cmp;
+  });
+
+  updateSortIndicators();
 
   const modeNames={all:"All Sources",face:"Face",fingerprint:"Fingerprint",greathr:"Great HR"};
   const tbody=document.getElementById("day-tbody");
@@ -439,15 +493,14 @@ function renderDayTable(){
   }
 
   tbody.innerHTML=rows.map((r,i)=>{
-    const uid=r["User ID"]||r["Employee No"]||r.uid||"";
-    const times=getCrossModeTimes(r.Name, date, currentTab==="all"?"all":currentTab);
-    const h=times.hours;
+    const uid=r._uid;
+    const h=r._hours;
     const hoursNum=(h==="—"||h===undefined)?0:Number(h);
     const [cls,label]=statusBadgeForDate(hoursNum, date);
-    const pnchHtml=`<span class="pnch-mode">${times.modePunches}</span><span class="pnch-sep">/</span><span class="pnch-total">${times.totalPunches}</span>`;
-    const ls=getLoginStatus(times.firstIn);
+    const pnchHtml=`<span class="pnch-mode">${r._modePunches}</span><span class="pnch-sep">/</span><span class="pnch-total">${r._totalPunches}</span>`;
+    const ls=getLoginStatus(r._firstIn);
     const firstInHtml=ls
-      ?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${times.firstIn}</span>`
+      ?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r._firstIn}</span>`
       :`<span style="color:var(--muted)">—</span>`;
     const team=getTeamFor(uid, r.Name);
     const teamHtml=team?`<span class="team-pill">${team}</span>`:`<span style="color:var(--muted)">—</span>`;
@@ -457,7 +510,7 @@ function renderDayTable(){
       <td><div class="emp">${r.Name||"—"}</div></td>
       <td>${teamHtml}</td>
       <td>${firstInHtml}</td>
-      <td class="t-out">${times.lastOut}</td>
+      <td class="t-out">${r._lastOut}</td>
       <td style="font-weight:600">${h==="—"?"—":h+"h"}</td>
       <td class="pnch">${pnchHtml}</td>
       <td><span class="badge ${cls}">${label}</span></td>
@@ -568,17 +621,36 @@ function getDayExportRows() {
     return getTeamFor(uid, r.Name) === teamSel;
   });
 
-  const headers=["Emp ID","Name","Team","Date","First In","Last Out","Hours","Total Punches","Status"];
-  const dataRows=rows.map(r=>{
+  // Enrich + sort to match the currently visible table (filtering before sorting)
+  rows = rows.map(r=>{
     const uid=r["User ID"]||r["Employee No"]||r.uid||"";
     const times=getCrossModeTimes(r.Name, date, currentTab==="all"?"all":currentTab);
-    const h=times.hours;
+    return { ...r, _uid: uid, _hours: times.hours, _totalPunches: times.totalPunches,
+             _firstIn: times.firstIn, _lastOut: times.lastOut };
+  });
+  rows.sort((a,b)=>{
+    let cmp=0;
+    if(sortState.column==="employee"){
+      cmp=(a.Name||"").localeCompare(b.Name||"");
+    } else if(sortState.column==="hours"){
+      const na=a._hours==="—"?0:Number(a._hours), nb=b._hours==="—"?0:Number(b._hours);
+      cmp=na-nb;
+    } else if(sortState.column==="punches"){
+      cmp=(a._totalPunches||0)-(b._totalPunches||0);
+    }
+    return sortState.direction === 'desc' ? -cmp : cmp;
+  });
+
+  const headers=["Emp ID","Name","Team","Date","First In","Last Out","Hours","Total Punches","Status"];
+  const dataRows=rows.map(r=>{
+    const uid=r._uid;
+    const h=r._hours;
     const hoursNum=(h==="—"||h===undefined)?0:Number(h);
     const full=getExpectedHours(date);
     const half=full/2;
     const status=hoursNum>=full?"Full day":hoursNum>=half?"Half day":"Short";
     const team=getTeamFor(uid, r.Name);
-    return[uid,r.Name||"",team,date,times.firstIn,times.lastOut,h==="—"?"":h,times.totalPunches,h==="—"?"—":status];
+    return[uid,r.Name||"",team,date,r._firstIn,r._lastOut,h==="—"?"":h,r._totalPunches,h==="—"?"—":status];
   });
   return {headers, dataRows};
 }

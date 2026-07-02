@@ -120,6 +120,9 @@ table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
 thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
 thead th:first-child{width:48px;text-align:center;}
+thead th.sortable{cursor:pointer;user-select:none;transition:color .15s;}
+thead th.sortable:hover{color:var(--text);}
+.sort-ind{font-size:10px;margin-left:3px;color:var(--accent);letter-spacing:0;}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer;}
 tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--row-hover);}
@@ -264,13 +267,11 @@ tbody tr:hover .badge{
     <input type="date" id="filterFrom" onchange="renderTable()">
     <label>To</label>
     <input type="date" id="filterTo"   onchange="renderTable()">
-    <div class="sep"></div>
-    <select id="sortSel" onchange="renderTable()">
-      <option value="date_desc">Date — Newest First</option>
-      <option value="date_asc">Date — Oldest First</option>
-      <option value="hours_desc">Hours — Highest First</option>
-      <option value="hours_asc">Hours — Lowest First</option>
+    <label>Month</label>
+    <select id="monthFilter" onchange="renderTable()">
+      <option value="">All Months</option>
     </select>
+    <div class="sep"></div>
     <button class="btn-clr" onclick="clearFilters()">✕ Clear</button>
     <button class="btn-clr" onclick="exportEmpExcel()">⬇ Excel</button>
     <button class="btn-clr" onclick="exportEmpCSV()">⬇ CSV</button>
@@ -283,8 +284,12 @@ tbody tr:hover .badge{
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Date</th><th>First In</th><th>Last Out</th>
-          <th>Hours</th><th>Punches</th><th>Sources</th><th>Status</th>
+          <th>#</th>
+          <th class="sortable" data-sort="date" onclick="setSort('date')">Date<span class="sort-ind" id="sort-ind-date"></span></th>
+          <th>First In</th><th>Last Out</th>
+          <th class="sortable" data-sort="hours" onclick="setSort('hours')">Hours<span class="sort-ind" id="sort-ind-hours"></span></th>
+          <th class="sortable" data-sort="punches" onclick="setSort('punches')">Punches<span class="sort-ind" id="sort-ind-punches"></span></th>
+          <th>Sources</th><th>Status</th>
         </tr>
       </thead>
       <tbody id="emp-tbody"></tbody>
@@ -351,6 +356,11 @@ let allEmployees=[];
 let selectedEmp=null;
 let acFocusIdx=-1;
 let panelContext=null;
+
+/* ── Sort state (replaces old Sort dropdown) ──
+   column: 'date' | 'hours' | 'punches'
+   direction: 'asc' | 'desc' */
+let sortState = { column: 'date', direction: 'desc' };
 
 /* ── Theme ── */
 function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
@@ -440,6 +450,29 @@ document.addEventListener("click",e=>{
     document.getElementById("autocomplete").style.display="none";
 });
 
+/* ── Month filter population ──
+   Scoped to the currently selected employee's own attendance records
+   (Face + Fingerprint + GreatHR combined). Rebuilt each time a new
+   employee is selected. Value stored as "YYYY-MM", displayed as "MMM YYYY". */
+function formatMonthLabel(ym){
+  const [y,m] = ym.split("-").map(Number);
+  const d = new Date(y, m-1, 1);
+  return d.toLocaleDateString("en-IN",{month:"short",year:"numeric"});
+}
+function populateMonthFilter(){
+  if(!selectedEmp) return;
+  const name = selectedEmp.name;
+  const sel = document.getElementById("monthFilter");
+  const monthSet = new Set();
+  [...faceData, ...fpData, ...ghrData].forEach(r=>{
+    if(r.Name !== name) return;
+    const d = (r.Date||"").toString().slice(0,10);
+    if(d.length===10) monthSet.add(d.slice(0,7));
+  });
+  const months = Array.from(monthSet).sort();
+  sel.innerHTML = `<option value="">All Months</option>` + months.map(ym=>`<option value="${ym}">${formatMonthLabel(ym)}</option>`).join("");
+}
+
 /* ── Select employee ── */
 function selectEmployee(name){
   document.getElementById("autocomplete").style.display="none";
@@ -449,8 +482,9 @@ function selectEmployee(name){
   document.getElementById("empSearch").value=name;
   document.getElementById("no-sel").style.display="none";
   document.getElementById("emp-view").style.display="block";
+  populateMonthFilter();
   renderProfile();
-  renderStats(null,null);
+  renderStats(null,null,null);
   renderTable();
 }
 
@@ -465,7 +499,8 @@ function clearEmployee(){
 function clearFilters(){
   document.getElementById("filterFrom").value="";
   document.getElementById("filterTo").value="";
-  document.getElementById("sortSel").value="date_desc";
+  document.getElementById("monthFilter").value="";
+  sortState = { column: 'date', direction: 'desc' };
   if(selectedEmp)renderTable();
 }
 function getLoginStatus(timeStr) {
@@ -503,11 +538,11 @@ function renderProfile(){
 }
 
 /* ── Render stat cards ── */
-function renderStats(from,to){
+function renderStats(from,to,month){
   const name=selectedEmp.name;
-  const faceRecs=faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to));
-  const fpRecs  =fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to));
-  const ghrRecs =ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to));
+  const faceRecs=faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
+  const fpRecs  =fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
+  const ghrRecs =ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
 
   const allDates=new Set([
     ...faceRecs.map(r=>r.Date),
@@ -516,9 +551,9 @@ function renderStats(from,to){
   ]);
   const totalDays=allDates.size;
 
-  const facePunches=punchData.filter(p=>p.Name===name&&p.Mode==="face"&&inRange(p.Date,from,to)).length;
-  const fpPunches  =punchData.filter(p=>p.Name===name&&p.Mode==="fingerprint"&&inRange(p.Date,from,to)).length;
-  const ghrPunches =punchData.filter(p=>p.Name===name&&p.Mode==="greathr"&&inRange(p.Date,from,to)).length;
+  const facePunches=punchData.filter(p=>p.Name===name&&p.Mode==="face"&&inRange(p.Date,from,to,month)).length;
+  const fpPunches  =punchData.filter(p=>p.Name===name&&p.Mode==="fingerprint"&&inRange(p.Date,from,to,month)).length;
+  const ghrPunches =punchData.filter(p=>p.Name===name&&p.Mode==="greathr"&&inRange(p.Date,from,to,month)).length;
 
   // Avg hours — computed from punchData first/last times per day (cross-mode)
   let totalHours=0;
@@ -570,15 +605,33 @@ function renderStats(from,to){
     </div>`;
 }
 
+/* ── Column sorting (replaces old Sort dropdown) ── */
+function setSort(column){
+  if(sortState.column === column){
+    sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.column = column;
+    sortState.direction = 'asc'; // every column starts Low→High / Oldest→Newest on first click
+  }
+  renderTable();
+}
+function updateSortIndicators(){
+  ['date','hours','punches'].forEach(col=>{
+    const el = document.getElementById('sort-ind-'+col);
+    if(!el) return;
+    el.textContent = sortState.column === col ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+}
+
 /* ── Render daily table ── */
 function renderTable(){
   if(!selectedEmp)return;
   const name=selectedEmp.name;
   const from=document.getElementById("filterFrom").value;
   const to  =document.getElementById("filterTo").value;
-  const sort=document.getElementById("sortSel").value;
+  const month=document.getElementById("monthFilter").value;
 
-  renderStats(from||null, to||null);
+  renderStats(from||null, to||null, month||null);
 
   const dateMap={};
   const addRec=(r,src)=>{
@@ -587,20 +640,30 @@ function renderTable(){
     if(!dateMap[d])dateMap[d]={date:d,face:null,fp:null,ghr:null};
     dateMap[d][src]=r;
   };
-  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"face"));
-  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"fp"));
-  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"ghr"));
+  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
+  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
+  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
 
-  let rows=Object.values(dateMap);
+  let rows=Object.values(dateMap).map(row=>({
+    ...row,
+    _hours: crossModeHours(row, name),
+    _totalPunches: countPunches(name, row.date)
+  }));
+
   rows.sort((a,b)=>{
-    if(sort==="date_desc") return b.date.localeCompare(a.date);
-    if(sort==="date_asc")  return a.date.localeCompare(b.date);
-    const ha=crossModeHours(a,name), hb=crossModeHours(b,name);
-    const na=ha==="—"?0:Number(ha), nb=hb==="—"?0:Number(hb);
-    if(sort==="hours_desc") return nb-na;
-    if(sort==="hours_asc")  return na-nb;
-    return b.date.localeCompare(a.date);
+    let cmp=0;
+    if(sortState.column==="date"){
+      cmp = a.date.localeCompare(b.date);
+    } else if(sortState.column==="hours"){
+      const na=a._hours==="—"?0:Number(a._hours), nb=b._hours==="—"?0:Number(b._hours);
+      cmp = na-nb;
+    } else if(sortState.column==="punches"){
+      cmp = (a._totalPunches||0)-(b._totalPunches||0);
+    }
+    return sortState.direction === 'desc' ? -cmp : cmp;
   });
+
+  updateSortIndicators();
 
   const total=Object.keys(dateMap).length;
   document.getElementById("count-pill").textContent=rows.length===total?`${total} days`:`${rows.length} of ${total} days`;
@@ -608,16 +671,17 @@ function renderTable(){
 
   const tbody=document.getElementById("emp-tbody");
   if(!rows.length){
-    tbody.innerHTML=`<tr><td colspan="8"><div class="no-data">No records${from||to?" in this date range":""}<small>Try clearing the filters</small></div></td></tr>`;
+    tbody.innerHTML=`<tr><td colspan="8"><div class="no-data">No records${from||to||month?" matching your filters":""}<small>Try clearing the filters</small></div></td></tr>`;
     return;
   }
 
   tbody.innerHTML=rows.map((row,i)=>{
-    const hours    = crossModeHours(row, name);
+    const hours    = row._hours;
     const hoursNum = (hours === "—" || hours === undefined) ? 0 : Number(hours);
-    const [cls,label] = statusBadgeForDate(hoursNum, row.date);    const firstIn     = crossModeFirstIn(name, row.date);
-    const lastOut     = crossModeLastOut(name, row.date);
-    const totalPunches = countPunches(name, row.date);
+    const [cls,label] = statusBadgeForDate(hoursNum, row.date);
+    const firstIn      = crossModeFirstIn(name, row.date);
+    const lastOut       = crossModeLastOut(name, row.date);
+    const totalPunches  = row._totalPunches;
     const ls = getLoginStatus(firstIn);
     const firstInHtml = ls
       ? `<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${firstIn}</span>`
@@ -643,10 +707,11 @@ function renderTable(){
 }
 
 /* ── Helpers ── */
-function inRange(dateStr,from,to){
+function inRange(dateStr,from,to,month){
   const d=(dateStr||"").toString().slice(0,10);
   if(from&&d<from)return false;
   if(to&&d>to)return false;
+  if(month&&d.slice(0,7)!==month)return false;
   return true;
 }
 
@@ -765,7 +830,7 @@ function getEmpExportRows() {
   const name = selectedEmp.name;
   const from = document.getElementById("filterFrom").value;
   const to   = document.getElementById("filterTo").value;
-  const sort = document.getElementById("sortSel").value;
+  const month = document.getElementById("monthFilter").value;
 
   const dateMap = {};
   const addRec = (r, src) => {
@@ -774,14 +839,27 @@ function getEmpExportRows() {
     if (!dateMap[d]) dateMap[d] = {date:d, face:null, fp:null, ghr:null};
     dateMap[d][src] = r;
   };
-  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"face"));
-  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"fp"));
-  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to)).forEach(r=>addRec(r,"ghr"));
+  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
+  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
+  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
 
-  let rows = Object.values(dateMap);
+  let rows = Object.values(dateMap).map(row=>({
+    ...row,
+    _hours: crossModeHours(row, name),
+    _totalPunches: countPunches(name, row.date)
+  }));
+
   rows.sort((a,b) => {
-    if (sort==="date_asc") return a.date.localeCompare(b.date);
-    return b.date.localeCompare(a.date);
+    let cmp=0;
+    if(sortState.column==="date"){
+      cmp = a.date.localeCompare(b.date);
+    } else if(sortState.column==="hours"){
+      const na=a._hours==="—"?0:Number(a._hours), nb=b._hours==="—"?0:Number(b._hours);
+      cmp = na-nb;
+    } else if(sortState.column==="punches"){
+      cmp = (a._totalPunches||0)-(b._totalPunches||0);
+    }
+    return sortState.direction === 'desc' ? -cmp : cmp;
   });
 
   const headers = ["Emp ID","Name","Team","Date","First In","Last Out","Hours","Total Punches","Status","Sources"];
@@ -789,12 +867,12 @@ function getEmpExportRows() {
     const uid = selectedEmp.ids[0]||"";
     const firstIn = crossModeFirstIn(name, row.date);
     const lastOut = crossModeLastOut(name, row.date);
-    const hours   = crossModeHours(row, name);
+    const hours   = row._hours;
     const hoursNum = (hours === "—" || hours === undefined) ? 0 : Number(hours);
     const full = getExpectedHours(row.date);
     const half = full / 2;
     const status = hours === "—" ? "—" : hoursNum >= full ? "Full day" : hoursNum >= half ? "Half day" : "Short";
-    const punches = countPunches(name, row.date);
+    const punches = row._totalPunches;
     const sources = [row.face?"Face":"", row.fp?"Fingerprint":"", row.ghr?"Great HR":""].filter(Boolean).join(", ");
     return [uid, name, selectedEmp.team||"", row.date, firstIn, lastOut, hours === "—" ? "" : hours, punches, status, sources];
   });

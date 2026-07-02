@@ -138,9 +138,10 @@ input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webki
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);overflow:hidden;}
 table{width:100%;border-collapse:collapse;}
 thead tr{background:var(--th-bg);border-bottom:2px solid var(--border);}
-thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;cursor:pointer;user-select:none;}
-thead th:hover{color:var(--text);}
-thead th.sorted{color:var(--accent);}
+thead th{padding:12px 16px;text-align:left;font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap;}
+thead th.sortable{cursor:pointer;user-select:none;transition:color .15s;}
+thead th.sortable:hover{color:var(--text);}
+.sort-ind{font-size:10px;margin-left:3px;color:var(--accent);letter-spacing:0;}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;}
 tbody tr:last-child{border-bottom:none;}
 tbody tr:hover{background:var(--row-hover);}
@@ -325,6 +326,12 @@ tbody tr:hover .badge{transform:translateY(-1px);}
       </select>
     </div>
     <div class="filter-group">
+      <label>Month</label>
+      <select id="monthFilterReports">
+        <option value="">All Months</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label>From Date</label>
       <input type="date" id="fDateFrom">
     </div>
@@ -381,13 +388,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
     <div class="results-title" id="resultsTitle">Report Results</div>
     <div class="results-controls">
       <input type="text" id="resSearch" placeholder="🔍 Filter results…" oninput="filterResults()">
-      <select id="resSort" onchange="filterResults()">
-        <option value="default">Default Order</option>
-        <option value="date_desc">Date Newest</option>
-        <option value="date_asc">Date Oldest</option>
-        <option value="hours_desc">Hours Highest</option>
-        <option value="hours_asc">Hours Lowest</option>
-      </select>
       <span style="font-size:13px;color:var(--muted);font-weight:500;">Top</span>
       <input type="number" id="rankTop" placeholder="All" min="0" step="1" style="width:72px;" oninput="filterResults()">
       <span class="count-pill" id="resCount">—</span>
@@ -430,6 +430,82 @@ const REPORT_DESC={
   source_comparison:  "Side-by-side breakdown of attendance days recorded across Face, Fingerprint and Great HR sources.",
 };
 
+/* ── Column sorting (replaces old Sort dropdown) ──
+   Only these 4 conceptual columns are ever sortable: Employee, Date, Hours, Punches.
+   Not every report type has all four — SORT_CONFIG maps each report type's actual
+   column(s) to the sort key, and is null/false where that concept doesn't exist. */
+const SORT_CONFIG = {
+  flags_combined:     { employee:true, date:true,  hours:r=>r._officialHours==="—"?0:(r._officialHours||0), punches:null },
+  summary:            { employee:true, date:false, hours:r=>parseFloat(r.avgH)||0, punches:r=>r.punches||0 },
+  single_punch:       { employee:true, date:true,  hours:null, punches:null },
+  fp_without_face:    { employee:true, date:true,  hours:r=>r.Hours==="—"?0:(r.Hours||0), punches:r=>r._fpCount||0 },
+  face_without_fp:    { employee:true, date:true,  hours:r=>r.Hours==="—"?0:(r.Hours||0), punches:r=>r._faceCount||0 },
+  duplicate_punch:    { employee:true, date:true,  hours:null, punches:null },
+  multiple_punch:     { employee:true, date:true,  hours:r=>r._officialHours==="—"?0:(r._officialHours||0), punches:r=>r.Total_Punches||0 },
+  attendance_pattern: { employee:true, date:false, hours:r=>parseFloat(r.avgHours)||0, punches:r=>parseFloat(r.avgPunches)||0 },
+  source_comparison:  { employee:true, date:false, hours:null, punches:null },
+};
+
+/* Default sort applied each time a report is generated */
+const DEFAULT_SORT = {
+  flags_combined:     { column:'date', direction:'desc' },
+  summary:            { column:'employee', direction:'asc' },
+  single_punch:       { column:'date', direction:'desc' },
+  fp_without_face:    { column:'date', direction:'desc' },
+  face_without_fp:    { column:'date', direction:'desc' },
+  duplicate_punch:    { column:'date', direction:'desc' },
+  multiple_punch:     { column:'date', direction:'desc' },
+  attendance_pattern: { column:'employee', direction:'asc' },
+  source_comparison:  { column:'employee', direction:'asc' },
+};
+
+let sortState = { column:'date', direction:'desc' };
+
+function setSort(column){
+  const cfg = SORT_CONFIG[currentReportType];
+  if(!cfg || !cfg[column]) return; // column not sortable for this report type
+  if(sortState.column === column){
+    sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortState.column = column;
+    sortState.direction = 'asc';
+  }
+  filterResults();
+}
+
+function updateSortIndicators(){
+  ['employee','date','hours','punches'].forEach(col=>{
+    const el = document.getElementById('sort-ind-'+col);
+    if(!el) return;
+    el.textContent = sortState.column === col ? (sortState.direction === 'asc' ? ' ▲' : ' ▼') : '';
+  });
+}
+
+/* Small helper to build a <th>, sortable only if the report type supports that column */
+function sortableTh(col, label){
+  const cfg = SORT_CONFIG[currentReportType];
+  if(cfg && cfg[col]){
+    return `<th class="sortable" data-sort="${col}" onclick="setSort('${col}')">${label}<span class="sort-ind" id="sort-ind-${col}"></span></th>`;
+  }
+  return `<th>${label}</th>`;
+}
+
+function compareRows(a,b){
+  const cfg = SORT_CONFIG[currentReportType];
+  const col = sortState.column;
+  if(!cfg || !col || !cfg[col]) return 0;
+  let cmp = 0;
+  if(col === 'employee'){
+    cmp = (a.Name||"").localeCompare(b.Name||"");
+  } else if(col === 'date'){
+    cmp = (a.Date||"").toString().localeCompare((b.Date||"").toString());
+  } else {
+    const fn = cfg[col];
+    cmp = (fn(a)||0) - (fn(b)||0);
+  }
+  return sortState.direction === 'desc' ? -cmp : cmp;
+}
+
 /* ── Theme ── */
 function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
 const st=localStorage.getItem("attendance-theme");
@@ -448,7 +524,27 @@ Promise.all([
   const sel=document.getElementById("teamFilterReports");
   const teams=window.AttData?window.AttData.listTeams(teamLookup):[];
   sel.innerHTML=`<option value="">All Teams</option>`+teams.map(t=>`<option value="${t}">${t}</option>`).join("");
+  populateMonthFilterReports();
 }).catch(()=>document.getElementById("idleHint").innerHTML="⚠ Could not load JSON files. Run python attendance.py first.");
+
+/* ── Month filter population (same pattern as index.html) ──
+   Built from all attendance datasets combined (Face + Fingerprint + GreatHR).
+   Value stored as "YYYY-MM", displayed as "MMM YYYY". */
+function formatMonthLabel(ym){
+  const [y,m] = ym.split("-").map(Number);
+  return new Date(y, m-1, 1).toLocaleDateString("en-IN",{month:"short",year:"numeric"});
+}
+function populateMonthFilterReports(){
+  const sel = document.getElementById("monthFilterReports");
+  const monthSet = new Set();
+  [...faceData, ...fpData, ...ghrData].forEach(r=>{
+    const d = (r.Date||"").toString().slice(0,10);
+    if(d.length===10) monthSet.add(d.slice(0,7));
+  });
+  const months = Array.from(monthSet).sort();
+  sel.innerHTML = `<option value="">All Months</option>` + months.map(ym=>`<option value="${ym}">${formatMonthLabel(ym)}</option>`).join("");
+}
+
 /* ── Mode tabs ── */
 function switchMode(m){
   currentMode=m;
@@ -549,6 +645,7 @@ function applyBaseFilters(rows){
   const dfrom =document.getElementById("fDateFrom").value;
   const dto   =document.getElementById("fDateTo").value;
   const teamSel=document.getElementById("teamFilterReports")?.value||"";
+  const monthSel=document.getElementById("monthFilterReports")?.value||"";
   return rows.filter(r=>{
     const id  =(r["User ID"]||r["Employee No"]||"").toString().toLowerCase();
     const name=(r.Name||"").toLowerCase();
@@ -557,6 +654,7 @@ function applyBaseFilters(rows){
     if(ename &&!name.includes(ename)) return false;
     if(dfrom && date<dfrom)           return false;
     if(dto   && date>dto)             return false;
+    if(monthSel && date.slice(0,7)!==monthSel) return false;
     if(teamSel){
       const uidRaw=r["User ID"]||r["Employee No"]||"";
       const team=getTeamFor(uidRaw, r.Name);
@@ -722,6 +820,7 @@ function renderReportInfoHeader(title){
   const eid  =document.getElementById("fEmpId").value.trim();
   const ename=document.getElementById("fEmpName").value.trim();
   const teamSel=document.getElementById("teamFilterReports")?.value||"";
+  const monthSel=document.getElementById("monthFilterReports")?.value||"";
 
   const tags=[];
   if(dfrom||dto){
@@ -735,6 +834,7 @@ function renderReportInfoHeader(title){
   if(eid)  tags.push(`<span class="rih-tag">🔢 Employee ID: <strong>${eid}</strong></span>`);
   if(ename)tags.push(`<span class="rih-tag">👤 Name filter: <strong>${ename}</strong></span>`);
   if(teamSel)tags.push(`<span class="rih-tag">🏷 Team: <strong>${teamSel}</strong></span>`);
+  if(monthSel)tags.push(`<span class="rih-tag">🗓 Month: <strong>${formatMonthLabel(monthSel)}</strong></span>`);
 
   document.getElementById("rihMeta").innerHTML=tags.join("");
 }
@@ -844,8 +944,9 @@ function generateReport(){
 
   if(selectedFlags.length){
     currentReportType="flags_combined";
+    sortState = {...DEFAULT_SORT[currentReportType]};
     const rows=buildCombinedFlagsReport(selectedFlags);
-    const headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Source</th><th>Reason</th></tr>`;
+    const headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>First In</th><th>Last Out</th>${sortableTh('hours','Hours')}<th>Source</th><th>Reason</th></tr>`;
     const title="Attendance Flags: "+selectedFlags.map(f=>FLAG_LABELS[f]).join(", ");
 
     reportRows=[...rows];
@@ -855,7 +956,6 @@ function generateReport(){
     document.getElementById("idleHint").style.display="none";
     document.getElementById("btnExport").style.display="";
     document.getElementById("resSearch").value="";
-    document.getElementById("resSort").value="default";
 
     renderReportInfoHeader(title);
     renderSummaryCards("flags_combined", rows);
@@ -866,6 +966,7 @@ function generateReport(){
   const type=document.getElementById("reportType").value;
   if(!type)return;
   currentReportType=type;
+  sortState = {...DEFAULT_SORT[type]};
   let src=applyBaseFilters(getSourceData()).map(r=>{
     const date=(r.Date||"").toString().slice(0,10);
     const off=getOfficialTimes(r.Name, date);
@@ -897,12 +998,12 @@ function generateReport(){
       map[k].days.add(r.Date);
     });
     rows=Object.values(map).map(e=>({...e,days:e.days.size,avgH:e.days.size?(e.totalH/e.days.size).toFixed(1):"—"}));
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th><th>Avg Hours</th><th>Total Punches</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Total Punches')}</tr>`;
   }
   else if(type==="single_punch"){
     title="Single Punch";
     rows=src.filter(r=>(r.Total_Punches||0)===1);
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Punch Time</th><th>Mode</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch Time</th><th>Mode</th></tr>`;
   }
   else if(type==="fp_without_face"){
     title="Fingerprint Without Face";
@@ -918,7 +1019,7 @@ function generateReport(){
         rows.push({...r,_faceCount:0,_fpCount:r.Total_Punches||1});
       }
     });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>FP First In</th><th>FP Last Out</th><th>Hours</th><th>FP Punches</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>FP First In</th><th>FP Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','FP Punches')}</tr>`;
   }
   else if(type==="face_without_fp"){
     title="Face Without Fingerprint";
@@ -934,7 +1035,7 @@ function generateReport(){
         rows.push({...r,_faceCount:r.Total_Punches||1,_fpCount:0});
       }
     });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Face First In</th><th>Face Last Out</th><th>Hours</th><th>Face Punches</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Face First In</th><th>Face Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','Face Punches')}</tr>`;
   }
   else if(type==="duplicate_punch"){
     title="Duplicate Punch";
@@ -952,13 +1053,13 @@ function generateReport(){
         rows.push({...r,_punch1:fi,_punch2:lo,_diffSecs:diffSecs});
       }
     });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Punch 1</th><th>Punch 2</th><th>Diff (secs)</th><th>Source</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch 1</th><th>Punch 2</th><th>Diff (secs)</th><th>Source</th></tr>`;
   }
   else if(type==="multiple_punch"){
     title="Multiple Punch";
     const threshPunches=parseInt(document.getElementById("thresholdPunches").value)||8;
     rows=src.filter(r=>(r.Total_Punches||0)>threshPunches);
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Total Punches</th><th>Hours</th><th>Source</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}${sortableTh('punches','Total Punches')}${sortableTh('hours','Hours')}<th>Source</th></tr>`;
   }
   else if(type==="attendance_pattern"){
     title="Attendance Pattern";
@@ -988,7 +1089,7 @@ function generateReport(){
         avgPunches:days?(e.totalPunches/days).toFixed(1):"—",
       };
     });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Working Days</th><th>Avg Login</th><th>Avg Logout</th><th>Avg Hours</th><th>Avg Punches/Day</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Working Days</th><th>Avg Login</th><th>Avg Logout</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Avg Punches/Day')}</tr>`;
   }
   else if(type==="source_comparison"){
     title="Attendance Source Comparison";
@@ -1005,7 +1106,7 @@ function generateReport(){
     allFP.forEach(r=>  {const e=ensureEmp(r);e.fpDays++;  e.allDays.add(r.Date);});
     allGHR.forEach(r=> {const e=ensureEmp(r);e.ghrDays++; e.allDays.add(r.Date);});
     rows=Object.values(map).map(e=>({...e,totalDays:e.allDays.size}));
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Face Days</th><th>Fingerprint Days</th><th>Great HR Days</th><th>Total Working Days</th></tr>`;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Face Days</th><th>Fingerprint Days</th><th>Great HR Days</th><th>Total Working Days</th></tr>`;
   }
 
   reportRows=[...rows];
@@ -1015,14 +1116,13 @@ function generateReport(){
   document.getElementById("idleHint").style.display="none";
   document.getElementById("btnExport").style.display="";
   document.getElementById("resSearch").value="";
-  document.getElementById("resSort").value="default";
 
   renderReportInfoHeader(title);
   renderSummaryCards(type, rows);
   filterResults();
 }
 
-/* ── Filter / sort results table ── */
+/* ── Filter / sort results table (filtering always happens before sorting) ── */
 function rankValueForType(type, r){
   if(type==="flags_combined") return r.Hours||0;
   if(type==="fp_without_face") return r._fpCount||0;
@@ -1037,9 +1137,9 @@ function rankValueForType(type, r){
 function filterResults(){
   const type=currentReportType;
   const q=document.getElementById("resSearch").value.toLowerCase().trim();
-  const sort=document.getElementById("resSort").value;
   const topN=parseInt(document.getElementById("rankTop").value)||0;
 
+  // Filtering always happens before sorting
   let rows=[...reportRows].filter(r=>{
     if(!q)return true;
     const name=(r.Name||"").toLowerCase();
@@ -1047,15 +1147,8 @@ function filterResults(){
     return name.includes(q)||id.includes(q);
   });
 
-  rows.sort((a,b)=>{
-    if(sort==="name_asc") return(a.Name||"").localeCompare(b.Name||"");
-    if(sort==="name_desc")return(b.Name||"").localeCompare(a.Name||"");
-    if(sort==="date_desc")return((b.Date||"").toString()).localeCompare((a.Date||"").toString());
-    if(sort==="date_asc") return((a.Date||"").toString()).localeCompare((b.Date||"").toString());
-    if(sort==="hours_desc")return(b.Hours||b.totalH||0)-(a.Hours||a.totalH||0);
-    if(sort==="hours_asc") return(a.Hours||a.totalH||0)-(b.Hours||b.totalH||0);
-    return 0;
-  });
+  rows.sort(compareRows);
+  updateSortIndicators();
 
   if(topN>0){
     rows=[...rows].sort((a,b)=>rankValueForType(type,b)-rankValueForType(type,a)).slice(0,topN);
@@ -1071,12 +1164,14 @@ function filterResults(){
     const hasDateFilter=document.getElementById("fDateFrom").value||document.getElementById("fDateTo").value;
     const hasEmpFilter=document.getElementById("fEmpId").value.trim()||document.getElementById("fEmpName").value.trim();
     const hasTeamFilter=document.getElementById("teamFilterReports")?.value;
+    const hasMonthFilter=document.getElementById("monthFilterReports")?.value;
     const tips=[];
     if(q_val) tips.push("Clear the results filter field above the table");
     if(hasDateFilter) tips.push("Widen the date range or remove date filters");
     if(hasEmpFilter) tips.push("Remove the Employee ID or Name filter");
     if(hasTeamFilter) tips.push("Remove the Team filter");
-    if(!q_val&&!hasDateFilter&&!hasEmpFilter&&!hasTeamFilter) tips.push("Try a different report type or flag combination");
+    if(hasMonthFilter) tips.push("Remove the Month filter");
+    if(!q_val&&!hasDateFilter&&!hasEmpFilter&&!hasTeamFilter&&!hasMonthFilter) tips.push("Try a different report type or flag combination");
     tips.push("Switch the attendance source tab (All / Face / Fingerprint / Great HR)");
     tbody.innerHTML=`<tr><td colspan="10">
       <div class="empty-state">
@@ -1324,6 +1419,7 @@ function clearAll(){
     if(el)el.value="";
   });
   document.getElementById("teamFilterReports").value="";
+  document.getElementById("monthFilterReports").value="";
   document.querySelectorAll(".flag-cb").forEach(cb=>cb.checked=false);
   ["flagThreshLateLogin","flagThreshEarlyLogin","flagThreshFullHours"].forEach(id=>{
     document.getElementById(id).style.display="none";
@@ -1348,6 +1444,7 @@ function clearAll(){
   document.getElementById("btnExport").style.display="none";
   document.getElementById("btnGenerate").disabled=true;
   reportRows=[];filteredRows=[];currentReportType="";
+  sortState={column:'date',direction:'desc'};
 }
 </script>
 <!-- Overlay + Panel (Punch Details) -->
