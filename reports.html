@@ -59,6 +59,12 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 [data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1);}
 input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 
+/* Flag checkboxes */
+.flags-wrap{display:flex;flex-wrap:wrap;gap:16px;padding:8px 0 2px;}
+.flag-check{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--text);font-weight:400;text-transform:none;letter-spacing:normal;cursor:pointer;background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:8px 14px;transition:border-color .15s;}
+.flag-check:hover{border-color:var(--accent);}
+.flag-check input{cursor:pointer;width:15px;height:15px;accent-color:var(--accent);}
+
 /* Report description */
 .report-desc{margin-top:14px;padding:10px 14px;background:rgba(108,99,255,.07);border:1px solid rgba(108,99,255,.2);border-radius:8px;font-size:13px;color:var(--muted);line-height:1.5;display:flex;align-items:center;gap:8px;}
 .report-desc.placeholder{background:rgba(255,255,255,.03);border-color:var(--border);font-style:italic;}
@@ -154,6 +160,7 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 .mode-fp{background:rgba(0,201,167,.15);color:var(--green);}
 .mode-ghr{background:rgba(124,58,237,.15);color:#c084fc;}
 .mode-all{background:rgba(255,179,71,.15);color:var(--amber);}
+.reason-pill{display:inline-block;padding:3px 9px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(255,101,132,.12);color:var(--accent2);white-space:normal;}
 .tfoot-row{padding:10px 16px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:13px;color:var(--muted);}
 
 /* ── Better empty state ── */
@@ -251,18 +258,49 @@ tbody tr:hover .badge{transform:translateY(-1px);}
   <h2><span></span>Report Configuration</h2>
 
   <div class="filter-grid">
+
+    <!-- Attendance Flags — multi-select, combines into one report -->
+    <div class="filter-group" style="grid-column:1/-1">
+      <label>Attendance Flags — select one or more (combined into a single report with a Reason column)</label>
+      <div class="flags-wrap">
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="late_login" onchange="onFlagsChange()"> Late Login</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="early_login" onchange="onFlagsChange()"> Early Login</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="overtime" onchange="onFlagsChange()"> Overtime</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="insufficient_hours" onchange="onFlagsChange()"> Insufficient Hours</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="missing_checkout" onchange="onFlagsChange()"> Missing Checkout</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="early_logout" onchange="onFlagsChange()"> Early Logout</label>
+      </div>
+    </div>
+
+    <!-- Flag-specific thresholds (shown only when relevant flag is checked) -->
+    <div class="filter-group" id="flagThreshLateLogin" style="display:none">
+      <label>Late Login After</label>
+      <input type="time" id="threshLateLoginTime" value="09:45">
+    </div>
+    <div class="filter-group" id="flagThreshEarlyLogin" style="display:none">
+      <label>Early Login Before</label>
+      <input type="time" id="threshEarlyLoginTime" value="09:30">
+    </div>
+    <div class="filter-group" id="flagThreshFullHours" style="display:none">
+      <label>Full Day Hours (Weekday / Sat)</label>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="number" id="threshFullWeekday" value="8" min="0" max="24" step="0.5" style="width:70px;">
+        <span style="font-size:12px;color:var(--muted)">/</span>
+        <input type="number" id="threshFullSat" value="4" min="0" max="24" step="0.5" style="width:70px;">
+      </div>
+    </div>
+    <div class="filter-group" id="flagThreshEarlyLogout" style="display:none">
+      <label>Early Logout Before</label>
+      <input type="time" id="threshEarlyLogoutTime" value="18:00">
+    </div>
+
+    <!-- Other Reports — structurally different aggregate reports, kept single-select -->
     <div class="filter-group" style="grid-column:span 2">
-      <label>Report Type</label>
+      <label>Other Report Type</label>
       <select id="reportType" class="report-type-select unselected" onchange="onReportTypeChange()" style="height:38px;max-width:100%;">
-        <option value="" disabled selected>Select report…</option>
+        <option value="" selected>None — use Attendance Flags above</option>
         <optgroup label="Attendance">
           <option value="summary">Attendance Summary</option>
-        </optgroup>
-        <optgroup label="Time">
-          <option value="early_login">Early Login</option>
-          <option value="late_login">Late Login</option>
-          <option value="insufficient_hours">Insufficient Hours</option>
-          <option value="overtime">Overtime</option>
         </optgroup>
         <optgroup label="Exceptions">
           <option value="single_punch">Single Punch</option>
@@ -287,6 +325,12 @@ tbody tr:hover .badge{transform:translateY(-1px);}
       <input type="text" id="fEmpName" placeholder="Search name…">
     </div>
     <div class="filter-group">
+      <label>Team</label>
+      <select id="teamFilterReports">
+        <option value="">All Teams</option>
+      </select>
+    </div>
+    <div class="filter-group">
       <label>From Date</label>
       <input type="date" id="fDateFrom">
     </div>
@@ -302,17 +346,12 @@ tbody tr:hover .badge{transform:translateY(-1px);}
     <span id="reportDescText">Select a report above to see its description.</span>
   </div>
 
-  <!-- Threshold row -->
+  <!-- Threshold row (Other Reports: duplicate/multiple punch) -->
   <div class="threshold-row" id="thresholdRow" style="display:none;">
-    <label id="thresholdLabel">Threshold Time</label>
-    <input type="time" id="thresholdTime" value="09:00">
-    <input type="number" id="thresholdHours" value="8" min="0" max="24" step="0.5" style="display:none;">
-    <span id="wdLabel" style="display:none;font-size:13px;color:var(--muted)">h weekdays</span>
-    <input type="number" id="thresholdHoursSat" value="4" min="0" max="24" step="0.5" style="display:none;">
-    <span id="satUnitLabel" style="display:none;font-size:13px;color:var(--muted)">h Saturdays</span>
+    <label id="thresholdLabel">Threshold</label>
     <input type="number" id="thresholdSeconds" value="30" min="1" max="3600" step="1" style="display:none;">
     <input type="number" id="thresholdPunches" value="8" min="1" max="100" step="1" style="display:none;">
-    <span id="thresholdUnit">AM</span>
+    <span id="thresholdUnit"></span>
   </div>
 
   <div class="action-row">
@@ -374,18 +413,20 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 <script>
 /* ── Data ── */
 let faceData=[], fpData=[], ghrData=[];
+let teamLookup={byId:{}, byName:{}};
 let currentMode="all";
 let reportRows=[];
 let filteredRows=[];
 let currentReportType="";
 
+const FLAG_LABELS={
+  late_login:"Late Login", early_login:"Early Login", overtime:"Overtime",
+  insufficient_hours:"Insufficient Hours", missing_checkout:"Missing Checkout", early_logout:"Early Logout"
+};
+
 /* ── Report descriptions ── */
 const REPORT_DESC={
   summary:            "Overall attendance, hours and punch statistics per employee.",
-  early_login:        "Employees whose first punch is before the configured login time.",
-  late_login:         "Employees whose first punch is after the configured login time.",
-  overtime:           "Employees who worked more than the required hours (Mon–Fri: 8h, Sat: 4h) on a given day.",
-  insufficient_hours: "Employees who worked fewer than the required hours (Mon–Fri: 8h, Sat: 4h) on a given day.",
   single_punch:       "Days where only a single punch was recorded — likely a missing check-in or check-out.",
   fp_without_face:    "Employees with Fingerprint punches but no Face/Great HR punch on the same day.",
   face_without_fp:    "Employees with Face/Great HR punches but no Fingerprint punch on the same day.",
@@ -407,8 +448,13 @@ Promise.all([
   fetch("fingerprint_summary.json").then(r=>r.json()),
   fetch("greathr_summary.json").then(r=>r.json()),
   fetch("punch_details.json").then(r=>r.json()),
-]).then(([f,fp,g,pd])=>{faceData=f;fpData=fp;ghrData=g;punchData=pd;})
-  .catch(()=>document.getElementById("idleHint").innerHTML="⚠ Could not load JSON files. Run python attendance.py first.");
+  window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
+]).then(([f,fp,g,pd,tl])=>{
+  faceData=f;fpData=fp;ghrData=g;punchData=pd;teamLookup=tl;
+  const sel=document.getElementById("teamFilterReports");
+  const teams=window.AttData?window.AttData.listTeams(teamLookup):[];
+  sel.innerHTML=`<option value="">All Teams</option>`+teams.map(t=>`<option value="${t}">${t}</option>`).join("");
+}).catch(()=>document.getElementById("idleHint").innerHTML="⚠ Could not load JSON files. Run python attendance.py first.");
 /* ── Mode tabs ── */
 function switchMode(m){
   currentMode=m;
@@ -417,64 +463,62 @@ function switchMode(m){
   });
 }
 
-/* ── Report type change ── */
+/* ── Flags checkbox handling ── */
+function onFlagsChange(){
+  const checked=v=>document.querySelector(`.flag-cb[value="${v}"]`).checked;
+  document.getElementById("flagThreshLateLogin").style.display=checked("late_login")?"":"none";
+  document.getElementById("flagThreshEarlyLogin").style.display=checked("early_login")?"":"none";
+  document.getElementById("flagThreshFullHours").style.display=(checked("overtime")||checked("insufficient_hours"))?"":"none";
+  document.getElementById("flagThreshEarlyLogout").style.display=checked("early_logout")?"":"none";
+  updateGenerateButtonState();
+}
+
+function updateGenerateButtonState(){
+  const anyFlag=[...document.querySelectorAll(".flag-cb")].some(cb=>cb.checked);
+  const dropdownVal=document.getElementById("reportType").value;
+  document.getElementById("btnGenerate").disabled=!(anyFlag||dropdownVal);
+  const desc=document.getElementById("reportDesc");
+  const descText=document.getElementById("reportDescText");
+  if(anyFlag){
+    const labels=[...document.querySelectorAll(".flag-cb:checked")].map(cb=>FLAG_LABELS[cb.value]);
+    desc.classList.remove("placeholder");
+    descText.textContent=`Combined report of employee-days matching: ${labels.join(", ")}. Each employee-day appears once, with a Reason column listing every matched flag.`;
+    desc.querySelector(".report-desc-icon").textContent="ℹ️";
+  }else if(!dropdownVal){
+    desc.classList.add("placeholder");
+    descText.textContent="Select a report above to see its description.";
+    desc.querySelector(".report-desc-icon").textContent="💡";
+  }
+}
+
+/* ── Report type change (Other Reports dropdown) ── */
 function onReportTypeChange(){
   const t=document.getElementById("reportType").value;
   const sel=document.getElementById("reportType");
   const row=document.getElementById("thresholdRow");
-  const tTime=document.getElementById("thresholdTime");
-  const tHours=document.getElementById("thresholdHours");
   const tSeconds=document.getElementById("thresholdSeconds");
   const tPunches=document.getElementById("thresholdPunches");
   const tLabel=document.getElementById("thresholdLabel");
   const tUnit=document.getElementById("thresholdUnit");
   const desc=document.getElementById("reportDesc");
   const descText=document.getElementById("reportDescText");
-  const btnGenerate=document.getElementById("btnGenerate");
 
-  // Hide all threshold controls first
-  [tTime,tHours,document.getElementById("thresholdHoursSat"),tSeconds,tPunches].forEach(el=>el.style.display="none");
+  [tSeconds,tPunches].forEach(el=>el.style.display="none");
   tUnit.textContent="";
-  const satLbl=document.getElementById("satUnitLabel");
-  if(satLbl) satLbl.style.display="none";
-  const wdLbl=document.getElementById("wdLabel");
-  if(wdLbl) wdLbl.style.display="none";
 
   if(!t){
     sel.classList.add("unselected");
-    btnGenerate.disabled=true;
-    desc.classList.add("placeholder");
-    descText.textContent="Select a report above to see its description.";
-    desc.querySelector(".report-desc-icon").textContent="💡";
     row.style.display="none";
+    updateGenerateButtonState();
     return;
   }
 
   sel.classList.remove("unselected");
-  btnGenerate.disabled=false;
   desc.classList.remove("placeholder");
   descText.textContent=REPORT_DESC[t]||"";
   desc.querySelector(".report-desc-icon").textContent="ℹ️";
 
-  const timeReports=["early_login","late_login"];
-  const hourReports=["overtime","insufficient_hours"];
-
-  if(timeReports.includes(t)){
-    row.style.display="flex";
-    tTime.style.display="";
-    tTime.value = t==="late_login" ? "09:45" : "09:30";
-    tLabel.textContent=t==="late_login"?"After time":"Before time";
-  }else if(hourReports.includes(t)){
-    row.style.display="flex";
-    tLabel.textContent=t==="overtime"?"More than":"Less than";
-    tHours.style.display="";
-    tHours.placeholder="Weekday hrs";
-    document.getElementById("thresholdHoursSat").style.display="";
-    document.getElementById("thresholdHoursSat").placeholder="Saturday hrs";
-    tUnit.textContent="";
-    document.getElementById("wdLabel").style.display="";
-    document.getElementById("satUnitLabel").style.display="";
-  }else if(t==="duplicate_punch"){
+  if(t==="duplicate_punch"){
     row.style.display="flex";
     tSeconds.style.display="";
     tLabel.textContent="Within";
@@ -487,6 +531,7 @@ function onReportTypeChange(){
   }else{
     row.style.display="none";
   }
+  updateGenerateButtonState();
 }
 
 /* ── Helpers ── */
@@ -501,11 +546,16 @@ function getSourceData(){
   ];
 }
 
+function getTeamFor(uid,name){
+  return window.AttData?window.AttData.getTeam(teamLookup, uid, name):"";
+}
+
 function applyBaseFilters(rows){
   const eid   =document.getElementById("fEmpId").value.trim().toLowerCase();
   const ename =document.getElementById("fEmpName").value.trim().toLowerCase();
   const dfrom =document.getElementById("fDateFrom").value;
   const dto   =document.getElementById("fDateTo").value;
+  const teamSel=document.getElementById("teamFilterReports")?.value||"";
   return rows.filter(r=>{
     const id  =(r["User ID"]||r["Employee No"]||"").toString().toLowerCase();
     const name=(r.Name||"").toLowerCase();
@@ -514,6 +564,11 @@ function applyBaseFilters(rows){
     if(ename &&!name.includes(ename)) return false;
     if(dfrom && date<dfrom)           return false;
     if(dto   && date>dto)             return false;
+    if(teamSel){
+      const uidRaw=r["User ID"]||r["Employee No"]||"";
+      const team=getTeamFor(uidRaw, r.Name);
+      if(team!==teamSel) return false;
+    }
     return true;
   });
 }
@@ -538,6 +593,12 @@ function modeLabel(m){
   if(m==="fingerprint")return"🖐 Fingerprint";
   if(m==="greathr")return"📱 Great HR";
   return"🔀 All Sources";
+}
+function modeLabelShort(m){
+  if(m==="face")return"Face";
+  if(m==="fingerprint")return"Fingerprint";
+  if(m==="greathr")return"Great HR";
+  return m;
 }
 
 /* Convert "09:15 AM" / "09:15" punch time string to total minutes from midnight */
@@ -606,6 +667,58 @@ function getLoginStatus(timeStr) {
   return                           { color: "var(--amber)", tooltip: "Late Login" };
 }
 
+/* ── Combined Attendance Flags report ── */
+function buildCombinedFlagsReport(flags){
+  const lateThresh   = timeToMins(document.getElementById("threshLateLoginTime").value||"09:45");
+  const earlyThresh  = timeToMins(document.getElementById("threshEarlyLoginTime").value||"09:30");
+  const wdFull       = parseFloat(document.getElementById("threshFullWeekday").value)||8;
+  const satFull      = parseFloat(document.getElementById("threshFullSat").value)||4;
+  const logoutThresh = timeToMins(document.getElementById("threshEarlyLogoutTime").value||"18:00");
+
+  const src=applyBaseFilters(getSourceData());
+  const map={};
+  src.forEach(r=>{
+    const date=(r.Date||"").toString().slice(0,10);
+    if(!date)return;
+    const key=`${r.Name}||${date}`;
+    if(!map[key]){
+      const off=getOfficialTimes(r.Name,date);
+      map[key]={
+        Name:r.Name,
+        ID:r["User ID"]||r["Employee No"]||"",
+        Date:date,
+        First_In:off.firstIn,
+        Last_Out:off.lastOut,
+        Hours:off.hours==="—"?0:off.hours,
+        _officialHours:off.hours,
+        modes:new Set(),
+      };
+    }
+    map[key].modes.add(r._mode);
+  });
+
+  const rows=[];
+  Object.values(map).forEach(e=>{
+    const reasons=[];
+    const firstInMins=punchTimeToMins(e.First_In);
+    const lastOutMins=punchTimeToMins(e.Last_Out);
+    const isSat=new Date(e.Date+"T00:00:00").getDay()===6;
+    const fullThresh=isSat?satFull:wdFull;
+
+    if(flags.includes("late_login") && firstInMins!==null && firstInMins>lateThresh) reasons.push("Late Login");
+    if(flags.includes("early_login") && firstInMins!==null && firstInMins<earlyThresh) reasons.push("Early Login");
+    if(flags.includes("overtime") && e.Hours>fullThresh) reasons.push("Overtime");
+    if(flags.includes("insufficient_hours") && e.Hours>0 && e.Hours<fullThresh) reasons.push("Insufficient Hours");
+    if(flags.includes("missing_checkout") && e.First_In!=="—" && e.Last_Out==="—") reasons.push("Missing Checkout");
+    if(flags.includes("early_logout") && lastOutMins!==null && lastOutMins<logoutThresh) reasons.push("Early Logout");
+
+    if(reasons.length){
+      rows.push({...e, Mode:[...e.modes].map(modeLabelShort).join(", "), Reason:reasons.join(", ")});
+    }
+  });
+  return rows;
+}
+
 /* ── Report info header ── */
 function renderReportInfoHeader(title){
   const now=new Date();
@@ -617,6 +730,7 @@ function renderReportInfoHeader(title){
   const dto  =document.getElementById("fDateTo").value;
   const eid  =document.getElementById("fEmpId").value.trim();
   const ename=document.getElementById("fEmpName").value.trim();
+  const teamSel=document.getElementById("teamFilterReports")?.value||"";
 
   const tags=[];
   if(dfrom||dto){
@@ -629,6 +743,7 @@ function renderReportInfoHeader(title){
   tags.push(`<span class="rih-tag">📡 Source: <strong>${modeLabel(currentMode)}</strong></span>`);
   if(eid)  tags.push(`<span class="rih-tag">🔢 Employee ID: <strong>${eid}</strong></span>`);
   if(ename)tags.push(`<span class="rih-tag">👤 Name filter: <strong>${ename}</strong></span>`);
+  if(teamSel)tags.push(`<span class="rih-tag">🏷 Team: <strong>${teamSel}</strong></span>`);
 
   document.getElementById("rihMeta").innerHTML=tags.join("");
 }
@@ -638,7 +753,17 @@ function renderSummaryCards(type, rows){
   const container=document.getElementById("summaryCards");
   const cards=[];
 
-  if(type==="summary"){
+  if(type==="flags_combined"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const reasonCounts={};
+    rows.forEach(r=>r.Reason.split(", ").forEach(x=>{reasonCounts[x]=(reasonCounts[x]||0)+1;}));
+    const topReason=Object.entries(reasonCounts).sort((a,b)=>b[1]-a[1])[0];
+    cards.push({label:"Records Found",val:rows.length,sub:"employee-days flagged",c:"var(--accent2)"});
+    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Most Common",val:topReason?topReason[0]:"—",sub:topReason?topReason[1]+" occurrences":"",c:"var(--amber)"});
+    cards.push({label:"Flags Matched",val:Object.keys(reasonCounts).length,sub:"distinct reasons found",c:"var(--green)"});
+  }
+  else if(type==="summary"){
     const totalEmps=rows.length;
     const totalDays=rows.reduce((s,r)=>s+r.days,0);
     const avgH=totalDays?( rows.reduce((s,r)=>s+(parseFloat(r.avgH)||0)*r.days,0)/totalDays ).toFixed(1):"—";
@@ -647,26 +772,6 @@ function renderSummaryCards(type, rows){
     cards.push({label:"Total Day-Records",val:totalDays,sub:"across all sources",c:"#a89fff"});
     cards.push({label:"Avg Hours / Day",val:avgH+"h",sub:"all employees",c:"var(--amber)"});
     cards.push({label:"Total Punches",val:totalPunches,sub:"all sources",c:"var(--green)"});
-  }
-  else if(["early_login","late_login"].includes(type)){
-    const empSet=new Set(rows.map(r=>r.Name));
-    const avgH=rows.length?(rows.reduce((s,r)=>s+(r.Hours||0),0)/rows.length).toFixed(1):"—";
-    const thresh=document.getElementById("thresholdTime").value||"—";
-    cards.push({label:"Records Found",val:rows.length,sub:"matching threshold",c:"var(--accent)"});
-    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
-    cards.push({label:"Avg Hours",val:avgH+"h",sub:"on flagged days",c:"var(--amber)"});
-    cards.push({label:"Threshold",val:thresh,sub:"configured time",c:"var(--green)"});
-  }
-  else if(["overtime","insufficient_hours"].includes(type)){
-    const empSet=new Set(rows.map(r=>r.Name));
-    const avgH=rows.length?(rows.reduce((s,r)=>s+(r.Hours||0),0)/rows.length).toFixed(1):"—";
-    const extremeH=rows.length?(type==="overtime"?Math.max:Math.min)(...rows.map(r=>r.Hours||0)).toFixed(1):"—";
-    const satCount=rows.filter(r=>new Date((r.Date||"")+"T00:00:00").getDay()===6).length;
-    cards.push({label:"Records Found",val:rows.length,sub:"days",c:"var(--accent)"});
-    cards.push({label:"Employees",val:empSet.size,sub:"unique",c:"#a89fff"});
-    cards.push({label:"Avg Hours",val:avgH+"h",sub:"on flagged days",c:"var(--amber)"});
-    cards.push({label:type==="overtime"?"Max Hours":"Min Hours",val:extremeH+"h",sub:"single day",c:type==="overtime"?"var(--green)":"var(--accent2)"});
-    if(satCount>0) cards.push({label:"Saturday Records",val:satCount,sub:"4h full day threshold",c:"var(--purple)"});
   }
   else if(type==="single_punch"){
     const empSet=new Set(rows.map(r=>r.Name));
@@ -744,6 +849,29 @@ function renderSummaryCards(type, rows){
 
 /* ── Generate ── */
 function generateReport(){
+  const selectedFlags=[...document.querySelectorAll(".flag-cb:checked")].map(cb=>cb.value);
+
+  if(selectedFlags.length){
+    currentReportType="flags_combined";
+    const rows=buildCombinedFlagsReport(selectedFlags);
+    const headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Source</th><th>Reason</th></tr>`;
+    const title="Attendance Flags: "+selectedFlags.map(f=>FLAG_LABELS[f]).join(", ");
+
+    reportRows=[...rows];
+    document.getElementById("resHead").innerHTML=headHtml;
+    document.getElementById("resultsTitle").textContent=title;
+    document.getElementById("resultsSection").style.display="";
+    document.getElementById("idleHint").style.display="none";
+    document.getElementById("btnExport").style.display="";
+    document.getElementById("resSearch").value="";
+    document.getElementById("resSort").value="default";
+
+    renderReportInfoHeader(title);
+    renderSummaryCards("flags_combined", rows);
+    filterResults();
+    return;
+  }
+
   const type=document.getElementById("reportType").value;
   if(!type)return;
   currentReportType=type;
@@ -779,51 +907,6 @@ function generateReport(){
     });
     rows=Object.values(map).map(e=>({...e,days:e.days.size,avgH:e.days.size?(e.totalH/e.days.size).toFixed(1):"—"}));
     headHtml=`<tr><th>Employee</th><th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th><th>Avg Hours</th><th>Total Punches</th></tr>`;
-  }
-  else if(type==="early_login"||type==="late_login"){
-    title=type==="early_login"?"Early Login":"Late Login";
-    const thresh=document.getElementById("thresholdTime").value||"09:00";
-    const thMin=timeToMins(thresh);
-    rows=src.filter(r=>{
-      const fi=r.First_In||"";
-      if(!fi||fi==="—")return false;
-      const [timePart,period]=(fi+" ").trim().split(" ");
-      const [h,m]=timePart.split(":").map(Number);
-      let hh=h;
-      if(period==="PM"&&h!==12)hh+=12;
-      if(period==="AM"&&h===12)hh=0;
-      const mins=hh*60+m;
-      return type==="early_login"?mins<thMin:mins>thMin;
-    });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>Login Time</th><th>Hours</th><th>Mode</th></tr>`;
-  }
-  else if(type==="overtime"){
-    title="Overtime";
-    const wdThresh  = document.getElementById("thresholdHours").value;
-    const satThresh = document.getElementById("thresholdHoursSat").value;
-    rows = src.filter(r => {
-      const dateStr = (r.Date||"").slice(0,10);
-      const isSat   = new Date(dateStr+"T00:00:00").getDay() === 6;
-      const thresh  = isSat
-        ? (satThresh ? parseFloat(satThresh) : 4)
-        : (wdThresh  ? parseFloat(wdThresh)  : 8);
-      return (r.Hours||0) > thresh;
-    });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
-  }
-  else if(type==="insufficient_hours"){
-    title="Insufficient Hours";
-    const wdThresh  = document.getElementById("thresholdHours").value;
-    const satThresh = document.getElementById("thresholdHoursSat").value;
-    rows = src.filter(r => {
-      const dateStr = (r.Date||"").slice(0,10);
-      const isSat   = new Date(dateStr+"T00:00:00").getDay() === 6;
-      const thresh  = isSat
-        ? (satThresh ? parseFloat(satThresh) : 4)
-        : (wdThresh  ? parseFloat(wdThresh)  : 8);
-      return (r.Hours||0) > 0 && (r.Hours||0) < thresh;
-    });
-    headHtml=`<tr><th>Employee</th><th>ID</th><th>Date</th><th>First In</th><th>Last Out</th><th>Hours</th><th>Mode</th><th>Status</th></tr>`;
   }
   else if(type==="single_punch"){
     title="Single Punch";
@@ -866,11 +949,6 @@ function generateReport(){
     title="Duplicate Punch";
     const threshSecs=parseInt(document.getElementById("thresholdSeconds").value)||30;
     rows=[];
-    // We look for records where First_In and Last_Out are within threshold of each other,
-    // or where the data contains punch timestamps close together.
-    // Since summary JSON gives First_In / Last_Out only, we detect duplicates
-    // as records where Last_Out === First_In (same punch recorded twice) or
-    // where time difference between First_In and Last_Out is within the threshold.
     src.forEach(r=>{
       const fi=r.First_In||"";
       const lo=r.Last_Out||"";
@@ -955,8 +1033,7 @@ function generateReport(){
 
 /* ── Filter / sort results table ── */
 function rankValueForType(type, r){
-  if(type==="early_login"||type==="late_login") return punchTimeToMins(r.First_In) ?? -Infinity;
-  if(type==="overtime"||type==="insufficient_hours") return r.Hours||0;
+  if(type==="flags_combined") return r.Hours||0;
   if(type==="fp_without_face") return r._fpCount||0;
   if(type==="face_without_fp") return r._faceCount||0;
   if(type==="multiple_punch") return r.Total_Punches||0;
@@ -1002,11 +1079,13 @@ function filterResults(){
     const q_val=document.getElementById("resSearch").value.trim();
     const hasDateFilter=document.getElementById("fDateFrom").value||document.getElementById("fDateTo").value;
     const hasEmpFilter=document.getElementById("fEmpId").value.trim()||document.getElementById("fEmpName").value.trim();
+    const hasTeamFilter=document.getElementById("teamFilterReports")?.value;
     const tips=[];
     if(q_val) tips.push("Clear the results filter field above the table");
     if(hasDateFilter) tips.push("Widen the date range or remove date filters");
     if(hasEmpFilter) tips.push("Remove the Employee ID or Name filter");
-    if(!q_val&&!hasDateFilter&&!hasEmpFilter) tips.push("Try a different report type");
+    if(hasTeamFilter) tips.push("Remove the Team filter");
+    if(!q_val&&!hasDateFilter&&!hasEmpFilter&&!hasTeamFilter) tips.push("Try a different report type or flag combination");
     tips.push("Switch the attendance source tab (All / Face / Fingerprint / Great HR)");
     tbody.innerHTML=`<tr><td colspan="10">
       <div class="empty-state">
@@ -1033,6 +1112,20 @@ function buildRow(type,r,i){
   const hasDate=!!date;
   const rowClick=hasDate?`onclick="openPanel('${safeName}','${date}','${safeId}')" style="cursor:pointer"`:"";
 
+  if(type==="flags_combined"){
+    const ls=getLoginStatus(r.First_In);
+    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
+    return`<tr ${rowClick}>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td>${firstInHtml}</td>
+      <td class="t-out">${r.Last_Out||"—"}</td>
+      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
+      <td style="color:var(--muted);font-size:12px">${r.Mode}</td>
+      <td><span class="reason-pill">${r.Reason}</span></td>
+    </tr>`;
+  }
   if(type==="summary"){
     return`<tr>
       <td><span class="emp-name">${r.Name}</span></td>
@@ -1043,32 +1136,6 @@ function buildRow(type,r,i){
       <td><span class="mode-pill mode-ghr">${r.ghr}</span></td>
       <td style="font-weight:600;color:var(--amber)">${r.avgH==="—"?r.avgH:r.avgH+"h"}</td>
       <td style="color:var(--muted)">${r.punches}</td>
-    </tr>`;
-  }
-  if(type==="early_login"||type==="late_login"){
-    const ls=getLoginStatus(r.First_In);
-    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
-    return`<tr ${rowClick}>
-      <td><span class="emp-name">${r.Name}</span></td>
-      <td style="color:var(--muted)">${id}</td>
-      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
-      <td>${firstInHtml}</td>
-      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
-      <td>${modePill(r._mode)}</td>
-    </tr>`;
-  }
-  if(type==="overtime"||type==="insufficient_hours"){
-    const ls=getLoginStatus(r.First_In);
-    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
-    return`<tr ${rowClick}>
-      <td><span class="emp-name">${r.Name}</span></td>
-      <td style="color:var(--muted)">${id}</td>
-      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
-      <td>${firstInHtml}</td>
-      <td class="t-out">${r.Last_Out||"—"}</td>
-      <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
-      <td>${modePill(r._mode)}</td>
-      <td>${statusBadge(r.Hours||0, r.Date)}</td>
     </tr>`;
   }
   if(type==="single_punch"){
@@ -1148,9 +1215,8 @@ function buildExportRows(){
   const headers=[...document.querySelectorAll("#resHead th")].map(h=>h.textContent);
   const dataRows=filteredRows.map(r=>{
     const id=r.ID||r["User ID"]||r["Employee No"]||"";
+    if(type==="flags_combined")        return[r.Name,id,r.Date,r.First_In,r.Last_Out,r._officialHours==="—"?"":r._officialHours,r.Mode,r.Reason];
     if(type==="summary")               return[r.Name,id,r.days,r.face,r.fp,r.ghr,r.avgH,r.punches];
-    if(["early_login","late_login"].includes(type)) return[r.Name,id,r.Date,r.First_In,r.Hours,r._mode];
-    if(["overtime","insufficient_hours"].includes(type)){const h=r.Hours||0;const full=getExpectedHours(r.Date);const half=full/2;const status=h>=full?"Full day":h>=half?"Half day":"Short";return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._mode,status];}
     if(type==="single_punch")          return[r.Name,id,r.Date,r.First_In,r._mode];
     if(type==="fp_without_face")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._fpCount];
     if(type==="face_without_fp")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._faceCount];
@@ -1262,19 +1328,26 @@ document.addEventListener("keydown",e=>{if(e.key==="Escape")closePanel();});
 
 /* ── Clear ── */
 function clearAll(){
-  ["fEmpId","fEmpName","fDateFrom","fDateTo","thresholdTime"].forEach(id=>{
+  ["fEmpId","fEmpName","fDateFrom","fDateTo"].forEach(id=>{
     const el=document.getElementById(id);
-    if(el)el.value=el.type==="time"?"09:00":"";
+    if(el)el.value="";
   });
-  document.getElementById("thresholdHours").value="8";
-  document.getElementById("thresholdHoursSat").value="4";
+  document.getElementById("teamFilterReports").value="";
+  document.querySelectorAll(".flag-cb").forEach(cb=>cb.checked=false);
+  ["flagThreshLateLogin","flagThreshEarlyLogin","flagThreshFullHours","flagThreshEarlyLogout"].forEach(id=>{
+    document.getElementById(id).style.display="none";
+  });
+  document.getElementById("threshLateLoginTime").value="09:45";
+  document.getElementById("threshEarlyLoginTime").value="09:30";
+  document.getElementById("threshFullWeekday").value="8";
+  document.getElementById("threshFullSat").value="4";
+  document.getElementById("threshEarlyLogoutTime").value="18:00";
   document.getElementById("thresholdSeconds").value="30";
   document.getElementById("thresholdPunches").value="8";
   document.getElementById("rankTop").value="";
   const sel=document.getElementById("reportType");
   sel.value="";
   sel.classList.add("unselected");
-  document.getElementById("btnGenerate").disabled=true;
   const desc=document.getElementById("reportDesc");
   desc.classList.add("placeholder");
   document.getElementById("reportDescText").textContent="Select a report above to see its description.";
@@ -1283,6 +1356,7 @@ function clearAll(){
   document.getElementById("resultsSection").style.display="none";
   document.getElementById("idleHint").style.display="";
   document.getElementById("btnExport").style.display="none";
+  document.getElementById("btnGenerate").disabled=true;
   reportRows=[];filteredRows=[];currentReportType="";
 }
 </script>
