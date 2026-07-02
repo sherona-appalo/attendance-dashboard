@@ -268,7 +268,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="overtime" onchange="onFlagsChange()"> Overtime</label>
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="insufficient_hours" onchange="onFlagsChange()"> Insufficient Hours</label>
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="missing_checkout" onchange="onFlagsChange()"> Missing Checkout</label>
-        <label class="flag-check"><input type="checkbox" class="flag-cb" value="early_logout" onchange="onFlagsChange()"> Early Logout</label>
       </div>
     </div>
 
@@ -289,11 +288,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
         <input type="number" id="threshFullSat" value="4" min="0" max="24" step="0.5" style="width:70px;">
       </div>
     </div>
-    <div class="filter-group" id="flagThreshEarlyLogout" style="display:none">
-      <label>Early Logout Before</label>
-      <input type="time" id="threshEarlyLogoutTime" value="18:00">
-    </div>
-
     <!-- Other Reports — structurally different aggregate reports, kept single-select -->
     <div class="filter-group" style="grid-column:span 2">
       <label>Other Report Type</label>
@@ -421,7 +415,7 @@ let currentReportType="";
 
 const FLAG_LABELS={
   late_login:"Late Login", early_login:"Early Login", overtime:"Overtime",
-  insufficient_hours:"Insufficient Hours", missing_checkout:"Missing Checkout", early_logout:"Early Logout"
+  insufficient_hours:"Insufficient Hours", missing_checkout:"Missing Checkout"
 };
 
 /* ── Report descriptions ── */
@@ -469,7 +463,6 @@ function onFlagsChange(){
   document.getElementById("flagThreshLateLogin").style.display=checked("late_login")?"":"none";
   document.getElementById("flagThreshEarlyLogin").style.display=checked("early_login")?"":"none";
   document.getElementById("flagThreshFullHours").style.display=(checked("overtime")||checked("insufficient_hours"))?"":"none";
-  document.getElementById("flagThreshEarlyLogout").style.display=checked("early_logout")?"":"none";
   updateGenerateButtonState();
 }
 
@@ -673,7 +666,6 @@ function buildCombinedFlagsReport(flags){
   const earlyThresh  = timeToMins(document.getElementById("threshEarlyLoginTime").value||"09:30");
   const wdFull       = parseFloat(document.getElementById("threshFullWeekday").value)||8;
   const satFull      = parseFloat(document.getElementById("threshFullSat").value)||4;
-  const logoutThresh = timeToMins(document.getElementById("threshEarlyLogoutTime").value||"18:00");
 
   const src=applyBaseFilters(getSourceData());
   const map={};
@@ -710,7 +702,6 @@ function buildCombinedFlagsReport(flags){
     if(flags.includes("overtime") && e.Hours>fullThresh) reasons.push("Overtime");
     if(flags.includes("insufficient_hours") && e.Hours>0 && e.Hours<fullThresh) reasons.push("Insufficient Hours");
     if(flags.includes("missing_checkout") && e.First_In!=="—" && e.Last_Out==="—") reasons.push("Missing Checkout");
-    if(flags.includes("early_logout") && lastOutMins!==null && lastOutMins<logoutThresh) reasons.push("Early Logout");
 
     if(reasons.length){
       rows.push({...e, Mode:[...e.modes].map(modeLabelShort).join(", "), Reason:reasons.join(", ")});
@@ -1334,14 +1325,13 @@ function clearAll(){
   });
   document.getElementById("teamFilterReports").value="";
   document.querySelectorAll(".flag-cb").forEach(cb=>cb.checked=false);
-  ["flagThreshLateLogin","flagThreshEarlyLogin","flagThreshFullHours","flagThreshEarlyLogout"].forEach(id=>{
+  ["flagThreshLateLogin","flagThreshEarlyLogin","flagThreshFullHours"].forEach(id=>{
     document.getElementById(id).style.display="none";
   });
   document.getElementById("threshLateLoginTime").value="09:45";
   document.getElementById("threshEarlyLoginTime").value="09:30";
   document.getElementById("threshFullWeekday").value="8";
   document.getElementById("threshFullSat").value="4";
-  document.getElementById("threshEarlyLogoutTime").value="18:00";
   document.getElementById("thresholdSeconds").value="30";
   document.getElementById("thresholdPunches").value="8";
   document.getElementById("rankTop").value="";
