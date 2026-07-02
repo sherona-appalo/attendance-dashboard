@@ -19,7 +19,31 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 
 /* ── Header ── */
 .header{background:var(--surface);border-bottom:1px solid var(--border);padding:18px 36px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;}
-.header-left{display:flex;align-items:center;gap:16px;}
+.header-left{
+    flex:1;
+    display:flex;
+    align-items:center;
+    gap:16px;
+}
+.header-center{
+    flex:1;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+}
+
+.header-center img{
+    height:55px;
+    width:auto;
+    object-fit:contain;
+}
+
+.header-right{
+    flex:1;
+    display:flex;
+    justify-content:flex-end;
+    align-items:center;
+}
 .btn-back{display:flex;align-items:center;gap:6px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:13px;font-family:'Inter',sans-serif;cursor:pointer;transition:all .15s;text-decoration:none;}
 .btn-back:hover{border-color:var(--accent);color:var(--text);}
 .header-title h1{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
@@ -209,21 +233,32 @@ tbody tr:hover .badge{
 
 <!-- Header -->
 <div class="header">
+
   <div class="header-left">
     <a class="btn-back" href="index.html">← Back</a>
+
     <div class="header-title">
       <h1>Employee Lookup</h1>
       <p>Search an employee to view their full attendance history</p>
     </div>
   </div>
-  <div class="toggle-wrap">
-    <span>☀️</span>
-    <label class="toggle">
-      <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
-      <div class="track"></div><div class="thumb"></div>
-    </label>
-    <span>🌙</span>
+
+  <div class="header-center">
+      <img src="images/orisenc-logo.png" alt="Orisenc Technologies">
   </div>
+
+  <div class="header-right">
+      <div class="toggle-wrap">
+          <span>☀️</span>
+          <label class="toggle">
+              <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
+              <div class="track"></div>
+              <div class="thumb"></div>
+          </label>
+          <span>🌙</span>
+      </div>
+  </div>
+
 </div>
 
 <!-- Search Zone -->
