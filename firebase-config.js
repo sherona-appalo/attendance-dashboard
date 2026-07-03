@@ -1,5 +1,6 @@
 // ─── Replace these values with your Firebase project config ───────────────────
 // Firebase Console → Project Settings → Your Apps → SDK setup and configuration
+
 const firebaseConfig = {
   apiKey:            "AIzaSyDdqyIqR-ng53NNByAkAHYvBd3bpi6PfXc",
   authDomain:        "attendance-dashboard-76d72.firebaseapp.com",
