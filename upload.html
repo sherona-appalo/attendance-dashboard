@@ -2,9 +2,6 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8">
-  <script>
-    (function(){const t=localStorage.getItem('attendance-theme');if(t){document.documentElement.setAttribute('data-theme',t);document.documentElement.style.background=t==='light'?'#f3f4f8':'#0f1117';}})();
-  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Import Centre — Attendance</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
@@ -23,8 +20,20 @@
   </script>
 
   <style>
-    :root{--bg:#0f1117;--surface:#1a1d27;--surface2:#22263a;--border:#2e3347;--accent:#6c63ff;--accent2:#4ecca3;--text:#e8eaf0;--muted:#7b80a0;--danger:#ff5c6c;--success:#4ecca3;--radius:12px;}
-    [data-theme="light"]{--bg:#f3f4f8;--surface:#ffffff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--input-bg:#f9fafb;}
+    :root{
+    --bg:#f3f4f8;
+    --surface:#ffffff;
+    --surface2:#f9fafb;
+    --border:#e5e7eb;
+    --accent:#6c63ff;
+    --accent2:#4ecca3;
+    --text:#111827;
+    --muted:#6b7280;
+    --danger:#ff5c6c;
+    --success:#4ecca3;
+    --radius:12px;
+    --input-bg:#f9fafb;
+}
     *{box-sizing:border-box;margin:0;padding:0;}
     body{background:var(--bg);color:var(--text);font-family:'Inter',sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;}
     .logo{font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin-bottom:12px;}
