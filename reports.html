@@ -12,7 +12,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
 :root{--accent:#6c63ff;--accent2:#ff6584;--green:#00c9a7;--amber:#ffb347;--purple:#7c3aed;--card-r:14px;}
-[data-theme="dark"]{--bg:#0f1117;--surface:#1a1d27;--border:#2a2d3a;--text:#e8eaf0;--muted:#6b7280;--row-hover:rgba(108,99,255,.06);--input-bg:#1a1d27;--th-bg:#13151f;--foot-bg:#13151f;--pill-bg:rgba(108,99,255,.15);--pill-txt:#a89fff;--panel-bg:#13151f;--overlay:rgba(0,0,0,.55);}
 [data-theme="light"]{--bg:#f3f4f8;--surface:#ffffff;--border:#e5e7eb;--text:#111827;--muted:#6b7280;--row-hover:#f5f8ff;--input-bg:#f9fafb;--th-bg:#f9fafb;--foot-bg:#f9fafb;--pill-bg:#eff6ff;--pill-txt:#1d4ed8;--panel-bg:#ffffff;--overlay:rgba(0,0,0,.3);}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;transition:background .25s,color .25s;}
@@ -48,13 +47,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .btn-back:hover{border-color:var(--accent);color:var(--text);}
 .header-title h1{font-family:'Space Grotesk',sans-serif;font-size:21px;font-weight:700;background:linear-gradient(90deg,#6c63ff,#ff6584);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .header-title p{color:var(--muted);font-size:13px;margin-top:3px;}
-.toggle-wrap{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);}
-.toggle{position:relative;width:44px;height:24px;cursor:pointer;}
-.toggle input{display:none;}
-.track{position:absolute;inset:0;background:var(--border);border-radius:12px;transition:background .25s;}
-.toggle input:checked~.track{background:var(--accent);}
-.thumb{position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:left .2s;}
-.toggle input:checked~.thumb{left:23px;}
 
 /* Mode tabs */
 .tabs{display:flex;gap:0;padding:20px 36px 0;}
@@ -80,7 +72,6 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .filter-group input:focus,.filter-group select:focus{border-color:var(--accent);}
 .filter-group input::placeholder{color:var(--muted);}
 .filter-group select option{background:var(--surface);}
-[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator,[data-theme="dark"] input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(1);}
 input[type="date"]::-webkit-calendar-picker-indicator,input[type="time"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 
 /* Flag checkboxes */
@@ -206,11 +197,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
   .results-section{margin:0;}
   .report-info-header,.summary-cards,.table-wrap{border:1px solid #ddd;}
   .s-card{border:1px solid #ddd;}
-  [data-theme="dark"] .rih-tag,[data-theme="dark"] .s-card,[data-theme="dark"] .report-info-header,[data-theme="dark"] .table-wrap{background:#fff;color:#000;border-color:#ddd;}
-  [data-theme="dark"] thead tr{background:#f5f5f5;}
-  [data-theme="dark"] tbody tr:nth-child(even){background:#fafafa;}
-  [data-theme="dark"] .s-card .sc-val,[data-theme="dark"] .rih-title{color:#111;}
-  [data-theme="dark"] .sc-label,[data-theme="dark"] .rih-ts,[data-theme="dark"] .rih-tag,[data-theme="dark"] .tfoot-row{color:#555;}
 }
 
 /* ── Panel ── */
@@ -267,15 +253,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
   </div>
 
   <div class="header-right">
-    <div class="toggle-wrap">
-      <span>☀️</span>
-      <label class="toggle">
-        <input type="checkbox" id="themeToggle" onchange="toggleTheme()">
-        <div class="track"></div>
-        <div class="thumb"></div>
-      </label>
-      <span>🌙</span>
-    </div>
   </div>
 
 </div>
@@ -539,11 +516,6 @@ function compareRows(a,b){
   }
   return sortState.direction === 'desc' ? -cmp : cmp;
 }
-
-/* ── Theme ── */
-function toggleTheme(){const t=document.getElementById("themeToggle").checked?"dark":"light";document.documentElement.setAttribute("data-theme",t);localStorage.setItem("attendance-theme",t);}
-const st=localStorage.getItem("attendance-theme");
-if(st){document.documentElement.setAttribute("data-theme",st);document.getElementById("themeToggle").checked=st==="dark";}
 
 /* ── Load data ── */
 let punchData=[];
