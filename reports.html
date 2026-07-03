@@ -176,7 +176,40 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 .mode-fp{background:rgba(0,201,167,.15);color:var(--green);}
 .mode-ghr{background:rgba(124,58,237,.15);color:#c084fc;}
 .mode-all{background:rgba(255,179,71,.15);color:var(--amber);}
-.reason-pill{display:inline-block;padding:3px 9px;border-radius:4px;font-size:11px;font-weight:600;background:rgba(255,101,132,.12);color:var(--accent2);white-space:normal;}
+.reason-pill{
+    display:inline-block;
+    padding:3px 9px;
+    border-radius:4px;
+    font-size:11px;
+    font-weight:600;
+    margin:2px;
+    white-space:nowrap;
+}
+
+.reason-late{
+    background:#fff3cd;
+    color:#b45309;
+}
+
+.reason-early{
+    background:#dcfce7;
+    color:#15803d;
+}
+
+.reason-overtime{
+    background:#dbeafe;
+    color:#1d4ed8;
+}
+
+.reason-insufficient{
+    background:#fee2e2;
+    color:#dc2626;
+}
+
+.reason-missing{
+    background:#ede9fe;
+    color:#7c3aed;
+}
 .tfoot-row{padding:10px 16px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:13px;color:var(--muted);}
 
 /* ── Better empty state ── */
@@ -943,6 +976,25 @@ function renderSummaryCards(type, rows){
       <div class="sc-sub">${c.sub}</div>
     </div>`).join("");
 }
+function renderReasonPills(reasonText){
+    return reasonText.split(", ").map(reason => {
+
+        let cls = "";
+
+        if(reason === "Late Login")
+            cls = "reason-late";
+        else if(reason === "Early Login")
+            cls = "reason-early";
+        else if(reason === "Overtime")
+            cls = "reason-overtime";
+        else if(reason === "Insufficient Hours")
+            cls = "reason-insufficient";
+        else if(reason === "Missing Checkout")
+            cls = "reason-missing";
+
+        return `<span class="reason-pill ${cls}">${reason}</span>`;
+    }).join(" ");
+}
 
 /* ── Generate ── */
 function generateReport(){
@@ -1215,7 +1267,7 @@ function buildRow(type,r,i){
       <td class="t-out">${r.Last_Out||"—"}</td>
       <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
       <td style="color:var(--muted);font-size:12px">${r.Mode}</td>
-      <td><span class="reason-pill">${r.Reason}</span></td>
+      <td>${renderReasonPills(r.Reason)}</td>
     </tr>`;
   }
   if(type==="summary"){
