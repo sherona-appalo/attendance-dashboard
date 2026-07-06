@@ -140,11 +140,94 @@
     return Array.from(set).sort();
   }
 
+  // ── Shared attendance-calculation core ───────────────────────────────────
+  // These functions are the single source of truth for First In / Last Out /
+  // Working Hours / Present / Absent logic. Every page (Day View, Employee
+  // Lookup, Reports) must use these instead of re-implementing the rules,
+  // so results are always identical no matter where they're shown.
+
+  // Sunday = Weekend. Employees are never marked Absent on Sundays and
+  // Sundays are excluded from attendance-percentage math. (Future holidays
+  // can be added here later without touching the pages that call this.)
+  function isSunday(dateStr) {
+    if (!dateStr) return false;
+    return new Date(dateStr + 'T00:00:00').getDay() === 0;
+  }
+
+  function isWorkingDay(dateStr) {
+    return !isSunday(dateStr);
+  }
+
+  // First In / Last Out / Working Hours for one employee on one date,
+  // computed across ALL THREE sources (Face + Fingerprint + Great HR)
+  // combined. This must NEVER be filtered by attendance-mode tab — mode
+  // tabs only change which punch rows are *displayed*, never these values.
+  function getCrossModeTimes(punchData, name, date) {
+    const allForDay = (punchData || []).filter(
+      p => p.Name === name && (p.Date || '').slice(0, 10) === date
+    );
+
+    const modeCounts = { face: 0, fingerprint: 0, greathr: 0 };
+    allForDay.forEach(p => { if (modeCounts[p.Mode] !== undefined) modeCounts[p.Mode]++; });
+    const totalPunches = allForDay.length;
+
+    const times = allForDay.map(p => p.Time).filter(Boolean).sort();
+
+    if (times.length === 0) {
+      return { firstIn: '—', lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+    if (times.length === 1) {
+      return { firstIn: times[0].slice(0, 5), lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+
+    const firstIn = times[0].slice(0, 5);
+    const lastOut = times[times.length - 1].slice(0, 5);
+    const [fh, fm] = firstIn.split(':').map(Number);
+    const [lh, lm] = lastOut.split(':').map(Number);
+    const hours = Math.round(((lh * 60 + lm) - (fh * 60 + fm)) / 60 * 100) / 100;
+
+    return { firstIn, lastOut, hours, totalPunches, modeCounts };
+  }
+
+  // Present/Absent/Weekend determination for every employee in the Employee
+  // Master, for one date. One punch from ANY source is enough to be Present.
+  // Sundays are always 'weekend', never 'absent'.
+  async function getDayAttendance(date, punchData, employeeMasterOverride) {
+    const master = employeeMasterOverride || await getEmployeeMaster();
+    const weekend = isSunday(date);
+
+    const dayPunches = (punchData || []).filter(p => (p.Date || '').slice(0, 10) === date);
+    const namesWithPunch = new Set(dayPunches.map(p => p.Name));
+
+    const employees = (master || []).map(e => {
+      const id = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
+      const name = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
+      const team = e['Team'] || '';
+      const hasPunch = namesWithPunch.has(name);
+      const times = hasPunch
+        ? getCrossModeTimes(punchData, name, date)
+        : { firstIn: '—', lastOut: '—', hours: '—', totalPunches: 0, modeCounts: { face: 0, fingerprint: 0, greathr: 0 } };
+
+      let status;
+      if (hasPunch) status = 'present';
+      else if (weekend) status = 'weekend';
+      else status = 'absent';
+
+      return { id, name, team, status, ...times };
+    });
+
+    return { date, isWeekend: weekend, employees };
+  }
+
   window.AttData = {
     getEmployeeMaster,
     buildTeamLookup,
     getTeam,
     listTeams,
+    isSunday,
+    isWorkingDay,
+    getCrossModeTimes,
+    getDayAttendance,
   };
 
 })();

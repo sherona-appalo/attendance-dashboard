@@ -51,6 +51,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 input[type="date"]{height:44px;padding:0 16px;background:var(--surface);border:2px solid var(--accent);color:var(--text);border-radius:10px;font-size:16px;font-family:'Inter',sans-serif;outline:none;cursor:pointer;transition:background .25s;}
 input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 .selected-date-label{font-family:'Space Grotesk',sans-serif;font-size:22px;font-weight:700;color:var(--text);}
+.weekend-pill{display:inline-flex;align-items:center;gap:6px;padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;background:rgba(255,179,71,.14);color:var(--amber);text-transform:uppercase;letter-spacing:.05em;}
 .no-date-hint{font-size:14px;color:var(--muted);padding:60px 36px;text-align:center;}
 .summary-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:14px;padding:24px 36px 0;}
 .s-card{
@@ -81,6 +82,11 @@ input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer;}
 .section-divider{margin:28px 36px 0;border:none;border-top:1px solid var(--border);}
 .tabs-section{padding:24px 36px 0;}
 .tabs-section h2{font-family:'Space Grotesk',sans-serif;font-size:16px;font-weight:700;margin-bottom:14px;}
+.view-switch{display:flex;gap:10px;margin-bottom:16px;}
+.vtab{padding:9px 20px;font-size:13.5px;font-weight:700;border-radius:8px;border:1px solid var(--border);cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s;display:flex;align-items:center;gap:7px;}
+.vtab:hover{color:var(--text);}
+.vtab.active-present{background:var(--green);color:#fff;border-color:var(--green);}
+.vtab.active-absent{background:var(--accent2);color:#fff;border-color:var(--accent2);}
 .tabs{display:flex;gap:0;}
 .tab{padding:10px 24px;font-size:14px;font-weight:500;border:1px solid var(--border);cursor:pointer;background:var(--surface);color:var(--muted);transition:all .15s;}
 .tab:first-child{border-radius:8px 0 0 8px;}
@@ -145,6 +151,8 @@ tbody td:first-child{text-align:center;color:var(--muted);font-size:13px;}
 .badge-full{background:rgba(0,201,167,.12);color:var(--green);}.badge-full::before{background:var(--green);}
 .badge-half{background:rgba(255,179,71,.12);color:var(--amber);}.badge-half::before{background:var(--amber);}
 .badge-short{background:rgba(255,101,132,.12);color:var(--accent2);}.badge-short::before{background:var(--accent2);}
+.badge-absent{background:rgba(255,101,132,.12);color:var(--accent2);}.badge-absent::before{background:var(--accent2);}
+.badge-weekend{background:rgba(255,179,71,.12);color:var(--amber);}.badge-weekend::before{background:var(--amber);}
 .tfoot-row{padding:10px 16px;background:var(--foot-bg);border-top:1px solid var(--border);font-size:13px;color:var(--muted);transition:background .25s;}
 .no-data{text-align:center;padding:48px;color:var(--muted);}
 
@@ -212,6 +220,7 @@ tbody td:first-child{text-align:center;color:var(--muted);font-size:13px;}
   <label>Select Date</label>
   <input type="date" id="dayPicker" onchange="loadDay()">
   <span class="selected-date-label" id="selectedLabel"></span>
+  <span id="weekendPill"></span>
 </div>
 
 <div id="content">
@@ -270,9 +279,10 @@ tbody td:first-child{text-align:center;color:var(--muted);font-size:13px;}
 </div>
 
 <script>
-let faceData=[], fpData=[], ghrData=[], punchData=[];
+let faceData=[], fpData=[], ghrData=[], punchData=[], employeeMaster=[];
 let teamLookup={byId:{}, byName:{}};
 let currentTab="face";
+let currentView="present"; // 'present' | 'absent'
 let panelContext=null;
 
 /* ── Sort state (replaces old hardcoded per-tab sort) ──
@@ -287,9 +297,10 @@ Promise.all([
   fetch("fingerprint_summary.json").then(r=>r.json()),
   fetch("greathr_summary.json").then(r=>r.json()),
   fetch("punch_details.json").then(r=>r.json()),
+  window.AttData ? window.AttData.getEmployeeMaster() : Promise.resolve([]),
   window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
-]).then(([f,fp,g,pd,tl])=>{
-  faceData=f; fpData=fp; ghrData=g; punchData=pd; teamLookup=tl;
+]).then(([f,fp,g,pd,em,tl])=>{
+  faceData=f; fpData=fp; ghrData=g; punchData=pd; employeeMaster=em; teamLookup=tl;
   const p=new URLSearchParams(window.location.search);
   const d=p.get("date");
   if(d){document.getElementById("dayPicker").value=d;loadDay();}
@@ -302,33 +313,18 @@ function getTeamFor(uid, name){
   return window.AttData ? window.AttData.getTeam(teamLookup, uid, name) : "";
 }
 
-/* ── Cross-mode times for a given employee on a given date ── */
-/* ── Cross-mode times for a given employee on a given date ── */
-function getCrossModeTimes(name, date, mode) {
-  const allForDay = punchData.filter(p => p.Name === name && (p.Date||"").slice(0,10) === date);
-  const modePunches = mode==="all" ? allForDay.length : allForDay.filter(p => p.Mode === mode).length;
-  const totalPunches = allForDay.length;
-
-  // Official attendance: Face + Great HR only
-  const officialTimes = allForDay
-    .filter(p => p.Mode === "face" || p.Mode === "greathr")
-    .map(p => p.Time).sort();
-
-  if (officialTimes.length === 0) {
-    return { firstIn: "—", lastOut: "—", hours: "—", totalPunches, modePunches };
-  }
-  if (officialTimes.length === 1) {
-    return { firstIn: officialTimes[0].slice(0,5), lastOut: "—", hours: "—", totalPunches, modePunches };
-  }
-
-  const firstIn = officialTimes[0].slice(0,5);
-  const lastOut = officialTimes[officialTimes.length-1].slice(0,5);
-  const [fh,fm] = firstIn.split(":").map(Number);
-  const [lh,lm] = lastOut.split(":").map(Number);
-  const hours   = Math.round(((lh*60+lm)-(fh*60+fm))/60*100)/100;
-
-  return { firstIn, lastOut, hours, totalPunches, modePunches };
+/* ── Cross-mode First In / Last Out / Working Hours ──
+   Delegates to the shared calculation layer (att-data.js) so this page,
+   Employee Lookup and Reports can never disagree with each other.
+   IMPORTANT: these values are always computed across Face + Fingerprint +
+   Great HR together. The attendance-mode tabs below only change which rows
+   are *displayed* — they never change First In / Last Out / Hours. */
+function getCrossModeTimes(name, date, mode){
+  const t = window.AttData.getCrossModeTimes(punchData, name, date);
+  const modePunches = mode==="all" ? t.totalPunches : (t.modeCounts[mode]||0);
+  return { firstIn:t.firstIn, lastOut:t.lastOut, hours:t.hours, totalPunches:t.totalPunches, modePunches };
 }
+
 function getLoginStatus(timeStr) {
   if (!timeStr || timeStr === "—") return null;
   const [h, m] = timeStr.split(":").map(Number);
@@ -369,34 +365,52 @@ function updateSortIndicators(){
   });
 }
 
-function loadDay(){
+async function loadDay(){
   const date=document.getElementById("dayPicker").value;
   if(!date)return;
   document.getElementById("selectedLabel").textContent=formatDateLong(date);
+
+  const weekend = window.AttData ? window.AttData.isSunday(date) : false;
+  document.getElementById("weekendPill").innerHTML = weekend
+    ? `<span class="weekend-pill">🗓 Weekend — Sunday</span>` : "";
 
   const faceDay=faceData.filter(r=>(r.Date||"").slice(0,10)===date);
   const fpDay  =fpData.filter(r=>(r.Date||"").slice(0,10)===date);
   const ghrDay =ghrData.filter(r=>(r.Date||"").slice(0,10)===date);
   const allDay =[...faceDay,...fpDay,...ghrDay];
-  const totalPresent=new Set(allDay.map(r=>r.Name)).size;
 
   // All tab: unique employees across all sources
   const allNames = new Set(allDay.map(r=>r.Name));
+
+  // Present / Absent — always from the shared, Employee-Master-driven
+  // calculation so it can never disagree with Employee Lookup or Reports.
+  const dayAttendance = window.AttData
+    ? await window.AttData.getDayAttendance(date, punchData, employeeMaster)
+    : { isWeekend: weekend, employees: [] };
+  window._dayAttendance = dayAttendance; // cached for renderDayTable/export
+
+  const presentCount = dayAttendance.employees.filter(e=>e.status==="present").length;
+  const absentCount   = dayAttendance.employees.filter(e=>e.status==="absent").length;
 
   const teamOptions = window.AttData ? window.AttData.listTeams(teamLookup) : [];
   const teamOptionsHtml = `<option value="">All Teams</option>` + teamOptions.map(t=>`<option value="${t}">${t}</option>`).join("");
 
   document.getElementById("content").innerHTML=`
     <div class="summary-cards">
-      <div class="s-card" style="--c:var(--accent)"><div class="sc-label">Total Present</div><div class="sc-val">${totalPresent}</div><div class="sc-sub">employees</div></div>
-      <div class="s-card" style="--c:#a89fff"><div class="sc-label">Face</div><div class="sc-val">${new Set(faceDay.map(r=>r.Name)).size}</div><div class="sc-sub">employees</div></div>
-      <div class="s-card" style="--c:var(--green)"><div class="sc-label">Fingerprint</div><div class="sc-val">${new Set(fpDay.map(r=>r.Name)).size}</div><div class="sc-sub">employees</div></div>
-      <div class="s-card" style="--c:var(--purple)"><div class="sc-label">Great HR</div><div class="sc-val">${new Set(ghrDay.map(r=>r.Name)).size}</div><div class="sc-sub">employees</div></div>
+      <div class="s-card" style="--c:var(--green)"><div class="sc-label">Present</div><div class="sc-val">${presentCount}</div><div class="sc-sub">employees</div></div>
+      <div class="s-card" style="--c:var(--accent2)"><div class="sc-label">Absent</div><div class="sc-val">${weekend?"—":absentCount}</div><div class="sc-sub">${weekend?"weekend — not tracked":"employees"}</div></div>
+      <div class="s-card" style="--c:#a89fff"><div class="sc-label">Face Punches</div><div class="sc-val">${faceDay.length}</div><div class="sc-sub">punch records</div></div>
+      <div class="s-card" style="--c:var(--green)"><div class="sc-label">Fingerprint Punches</div><div class="sc-val">${fpDay.length}</div><div class="sc-sub">punch records</div></div>
+      <div class="s-card" style="--c:var(--purple)"><div class="sc-label">Great HR Punches</div><div class="sc-val">${ghrDay.length}</div><div class="sc-sub">punch records</div></div>
     </div>
     <hr class="section-divider">
     <div class="tabs-section">
       <h2>Attendance Records</h2>
-      <div class="tabs">
+      <div class="view-switch">
+        <div class="vtab active-present" id="vtab-present" onclick="switchView('present')">🟢 Present</div>
+        <div class="vtab" id="vtab-absent" onclick="switchView('absent')">🔴 Absent</div>
+      </div>
+      <div class="tabs" id="modeTabs">
         <div class="tab active-all"   id="dtab-all"         onclick="switchTab('all')">🔀 All (${allNames.size})</div>
         <div class="tab"              id="dtab-face"        onclick="switchTab('face')">👤 Face (${faceDay.length})</div>
         <div class="tab"              id="dtab-fingerprint" onclick="switchTab('fingerprint')">🖐 Fingerprint (${fpDay.length})</div>
@@ -413,20 +427,14 @@ function loadDay(){
     </div>
     <div class="table-wrap">
       <table>
-        <thead><tr>
-          <th>#</th><th>Emp ID</th>
-          <th class="sortable" data-sort="employee" onclick="setSort('employee')">Employee<span class="sort-ind" id="sort-ind-employee"></span></th>
-          <th>Team</th><th>First In</th><th>Last Out</th>
-          <th class="sortable" data-sort="hours" onclick="setSort('hours')">Hours<span class="sort-ind" id="sort-ind-hours"></span></th>
-          <th class="sortable" data-sort="punches" onclick="setSort('punches')">Punches<span class="sort-ind" id="sort-ind-punches"></span></th>
-          <th>Status</th>
-        </tr></thead>
+        <thead id="day-thead"></thead>
         <tbody id="day-tbody"></tbody>
       </table>
       <div class="tfoot-row" id="day-foot">—</div>
     </div>`;
 
   currentTab="all";
+  currentView="present";
   renderDayTable();
 }
 
@@ -439,9 +447,47 @@ function switchTab(tab){
   renderDayTable();
 }
 
+function switchView(view){
+  currentView=view;
+  document.getElementById("vtab-present").className="vtab"+(view==="present"?" active-present":"");
+  document.getElementById("vtab-absent").className="vtab"+(view==="absent"?" active-absent":"");
+  const modeTabs=document.getElementById("modeTabs");
+  if(modeTabs) modeTabs.style.display = view==="present" ? "flex" : "none";
+  renderDayTable();
+}
+
+function presentTableHeadHtml(){
+  return `<tr>
+      <th>#</th><th>Emp ID</th>
+      <th class="sortable" data-sort="employee" onclick="setSort('employee')">Employee<span class="sort-ind" id="sort-ind-employee"></span></th>
+      <th>Team</th><th>First In</th><th>Last Out</th>
+      <th class="sortable" data-sort="hours" onclick="setSort('hours')">Hours<span class="sort-ind" id="sort-ind-hours"></span></th>
+      <th class="sortable" data-sort="punches" onclick="setSort('punches')">Punches<span class="sort-ind" id="sort-ind-punches"></span></th>
+      <th>Status</th>
+    </tr>`;
+}
+function absentTableHeadHtml(){
+  return `<tr>
+      <th>#</th><th>Emp ID</th>
+      <th class="sortable" data-sort="employee" onclick="setSort('employee')">Employee<span class="sort-ind" id="sort-ind-employee"></span></th>
+      <th>Team</th><th>Status</th>
+    </tr>`;
+}
+
 function renderDayTable(){
   const date=document.getElementById("dayPicker").value;
   if(!date)return;
+
+  if(currentView==="absent"){
+    renderAbsentTable(date);
+    return;
+  }
+  renderPresentTable(date);
+}
+
+function renderPresentTable(date){
+  document.getElementById("day-thead").innerHTML = presentTableHeadHtml();
+
   const q=(document.getElementById("day-search")?.value||"").toLowerCase().trim();
   const teamSel=(document.getElementById("day-team-filter")?.value||"");
 
@@ -533,18 +579,66 @@ function renderDayTable(){
   }).join("");
 }
 
+function renderAbsentTable(date){
+  document.getElementById("day-thead").innerHTML = absentTableHeadHtml();
+
+  const q=(document.getElementById("day-search")?.value||"").toLowerCase().trim();
+  const teamSel=(document.getElementById("day-team-filter")?.value||"");
+  const dayAttendance = window._dayAttendance || { isWeekend:false, employees:[] };
+
+  let rows = dayAttendance.employees.filter(e=>e.status==="absent");
+
+  if(q) rows=rows.filter(e=>{
+    const id=(e.id||"").toString().toLowerCase();
+    return (e.name||"").toLowerCase().includes(q)||id.includes(q);
+  });
+  if(teamSel) rows=rows.filter(e=>(e.team||"")===teamSel);
+
+  rows.sort((a,b)=>{
+    const cmp=(a.name||"").localeCompare(b.name||"");
+    return sortState.direction==='desc' ? -cmp : cmp;
+  });
+  updateSortIndicators();
+
+  const tbody=document.getElementById("day-tbody");
+  const foot =document.getElementById("day-foot");
+  const cnt  =document.getElementById("day-count");
+  if(!tbody)return;
+
+  cnt.textContent=`${rows.length}`;
+
+  if(dayAttendance.isWeekend){
+    tbody.innerHTML=`<tr><td colspan="5"><div class="no-data">🗓 This is a Sunday — absences are not tracked on weekends</div></td></tr>`;
+    foot.textContent="Weekend — excluded from absent calculations";
+    return;
+  }
+
+  foot.textContent=`${rows.length} absent employee${rows.length!==1?"s":""} — zero punches across Face, Fingerprint and Great HR`;
+
+  if(!rows.length){
+    tbody.innerHTML=`<tr><td colspan="5"><div class="no-data">No absent employees${q||teamSel?" matching your filters":""} for this date 🎉</div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML=rows.map((e,i)=>{
+    const teamHtml=e.team?`<span class="team-pill">${e.team}</span>`:`<span style="color:var(--muted)">—</span>`;
+    return`<tr>
+      <td>${i+1}</td>
+      <td class="emp-id-col">${e.id||"—"}</td>
+      <td><div class="emp">${e.name||"—"}</div></td>
+      <td>${teamHtml}</td>
+      <td><span class="badge badge-absent">Absent</span></td>
+    </tr>`;
+  }).join("");
+}
+
 function openPanel(name, date, uid){
   panelContext={name, date, uid};
 
-  const allForDay = punchData.filter(p => p.Name===name && (p.Date||"").slice(0,10)===date);
-  const totalPunches = allForDay.length;
-
-  const officialTimes = allForDay
-    .filter(p => p.Mode === "face" || p.Mode === "greathr")
-    .map(p => p.Time).sort();
-
-  const firstIn = officialTimes.length >= 1 ? officialTimes[0].slice(0,5) : "—";
-  const lastOut = officialTimes.length >= 2 ? officialTimes[officialTimes.length-1].slice(0,5) : "—";
+  const t = window.AttData.getCrossModeTimes(punchData, name, date);
+  const firstIn = t.firstIn;
+  const lastOut = t.lastOut;
+  const totalPunches = t.totalPunches;
 
   document.getElementById("panel-name").textContent=name;
   document.getElementById("panel-id").textContent=uid?"Employee ID: #"+uid:"";
@@ -609,6 +703,28 @@ function renderPunchTable(){
 function getDayExportRows() {
   const date = document.getElementById("dayPicker").value;
   if (!date) return { headers:[], dataRows:[] };
+
+  if(currentView==="absent"){
+    const dayAttendance = window._dayAttendance || { isWeekend:false, employees:[] };
+    let rows = dayAttendance.employees.filter(e=>e.status==="absent");
+
+    const q=(document.getElementById("day-search")?.value||"").toLowerCase().trim();
+    if(q) rows=rows.filter(e=>{
+      const id=(e.id||"").toString().toLowerCase();
+      return (e.name||"").toLowerCase().includes(q)||id.includes(q);
+    });
+    const teamSel=(document.getElementById("day-team-filter")?.value||"");
+    if(teamSel) rows=rows.filter(e=>(e.team||"")===teamSel);
+
+    rows.sort((a,b)=>{
+      const cmp=(a.name||"").localeCompare(b.name||"");
+      return sortState.direction==='desc' ? -cmp : cmp;
+    });
+
+    const headers=["Emp ID","Name","Team","Date","Status"];
+    const dataRows=rows.map(e=>[e.id,e.name||"",e.team||"",date,"Absent"]);
+    return {headers, dataRows};
+  }
 
   let rows;
   if(currentTab==="all"){
@@ -681,7 +797,7 @@ function exportDayExcel() {
   const blob=new Blob([html],{type:"application/vnd.ms-excel;charset=utf-8"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=`attendance_${date}_${currentTab}.xls`;
+  a.download=`attendance_${date}_${currentView==="absent"?"absent":currentTab}.xls`;
   a.click();
 }
 
@@ -693,7 +809,7 @@ function exportDayCSV() {
   const blob=new Blob([csvRows.join("\n")],{type:"text/csv"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download=`attendance_${date}_${currentTab}.csv`;
+  a.download=`attendance_${date}_${currentView==="absent"?"absent":currentTab}.csv`;
   a.click();
 }
 
