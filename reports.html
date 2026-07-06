@@ -59,6 +59,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);min-h
 .tab.active-fingerprint{background:#00c9a7;color:#fff;border-color:#00c9a7;}
 .tab.active-greathr{background:#7c3aed;color:#fff;border-color:#7c3aed;}
 .tab:not([class*="active"]):hover{color:var(--text);}
+.tabs.tabs-disabled{opacity:.4;pointer-events:none;}
 
 /* Filter panel */
 .filter-panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-r);margin:20px 36px 0;padding:22px 24px;}
@@ -291,7 +292,7 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 </div>
 
 <!-- Mode tabs -->
-<div class="tabs">
+<div class="tabs" id="modeTabsReports">
   <div class="tab active-all" id="tab-all"         onclick="switchMode('all')">🔀 All</div>
   <div class="tab"            id="tab-face"        onclick="switchMode('face')">👤 Face</div>
   <div class="tab"            id="tab-fingerprint" onclick="switchMode('fingerprint')">🖐 Fingerprint</div>
@@ -313,6 +314,7 @@ tbody tr:hover .badge{transform:translateY(-1px);}
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="overtime" onchange="onFlagsChange()"> Overtime</label>
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="insufficient_hours" onchange="onFlagsChange()"> Insufficient Hours</label>
         <label class="flag-check"><input type="checkbox" class="flag-cb" value="missing_checkout" onchange="onFlagsChange()"> Missing Checkout</label>
+        <label class="flag-check"><input type="checkbox" class="flag-cb" value="absent" onchange="onFlagsChange()"> Absent</label>
       </div>
     </div>
 
@@ -452,6 +454,7 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 /* ── Data ── */
 let faceData=[], fpData=[], ghrData=[];
 let teamLookup={byId:{}, byName:{}};
+let employeeMaster=[];
 let currentMode="all";
 let reportRows=[];
 let filteredRows=[];
@@ -459,12 +462,13 @@ let currentReportType="";
 
 const FLAG_LABELS={
   late_login:"Late Login", early_login:"Early Login", overtime:"Overtime",
-  insufficient_hours:"Insufficient Hours", missing_checkout:"Missing Checkout"
+  insufficient_hours:"Insufficient Hours", missing_checkout:"Missing Checkout", absent:"Absent"
 };
 
 /* ── Report descriptions ── */
 const REPORT_DESC={
   summary:            "Overall attendance, hours and punch statistics per employee.",
+  absent:             "Employees with zero punches across Face, Fingerprint and Great HR on working days. Sundays are always excluded.",
   single_punch:       "Days where only a single punch was recorded — likely a missing check-in or check-out.",
   fp_without_face:    "Employees with Fingerprint punches but no Face/Great HR punch on the same day.",
   face_without_fp:    "Employees with Face/Great HR punches but no Fingerprint punch on the same day.",
@@ -481,6 +485,7 @@ const REPORT_DESC={
 const SORT_CONFIG = {
   flags_combined:     { employee:true, date:true,  hours:r=>r._officialHours==="—"?0:(r._officialHours||0), punches:null },
   summary:            { employee:true, date:false, hours:r=>parseFloat(r.avgH)||0, punches:r=>r.punches||0 },
+  absent:             { employee:true, date:true,  hours:null, punches:null },
   single_punch:       { employee:true, date:true,  hours:null, punches:null },
   fp_without_face:    { employee:true, date:true,  hours:r=>r.Hours==="—"?0:(r.Hours||0), punches:r=>r._fpCount||0 },
   face_without_fp:    { employee:true, date:true,  hours:r=>r.Hours==="—"?0:(r.Hours||0), punches:r=>r._faceCount||0 },
@@ -494,6 +499,7 @@ const SORT_CONFIG = {
 const DEFAULT_SORT = {
   flags_combined:     { column:'date', direction:'desc' },
   summary:            { column:'employee', direction:'asc' },
+  absent:             { column:'date', direction:'desc' },
   single_punch:       { column:'date', direction:'desc' },
   fp_without_face:    { column:'date', direction:'desc' },
   face_without_fp:    { column:'date', direction:'desc' },
@@ -557,9 +563,10 @@ Promise.all([
   fetch("fingerprint_summary.json").then(r=>r.json()),
   fetch("greathr_summary.json").then(r=>r.json()),
   fetch("punch_details.json").then(r=>r.json()),
+  window.AttData ? window.AttData.getEmployeeMaster() : Promise.resolve([]),
   window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
-]).then(([f,fp,g,pd,tl])=>{
-  faceData=f;fpData=fp;ghrData=g;punchData=pd;teamLookup=tl;
+]).then(([f,fp,g,pd,em,tl])=>{
+  faceData=f;fpData=fp;ghrData=g;punchData=pd;employeeMaster=em;teamLookup=tl;
   const sel=document.getElementById("teamFilterReports");
   const teams=window.AttData?window.AttData.listTeams(teamLookup):[];
   sel.innerHTML=`<option value="">All Teams</option>`+teams.map(t=>`<option value="${t}">${t}</option>`).join("");
@@ -582,6 +589,41 @@ function populateMonthFilterReports(){
   });
   const months = Array.from(monthSet).sort();
   sel.innerHTML = `<option value="">All Months</option>` + months.map(ym=>`<option value="${ym}">${formatMonthLabel(ym)}</option>`).join("");
+}
+
+/* ── Date-range helpers (used by the Absent Employees report, which must
+   walk every working day in the selected range rather than just the days
+   that already have punch rows) ── */
+function datesBetween(from, to){
+  const out=[];
+  if(!from||!to) return out;
+  let d=new Date(from+"T00:00:00");
+  const end=new Date(to+"T00:00:00");
+  while(d<=end){
+    out.push(d.toISOString().slice(0,10));
+    d.setDate(d.getDate()+1);
+  }
+  return out;
+}
+function datesInMonth(ym){
+  const [y,m]=ym.split("-").map(Number);
+  const daysInMonth=new Date(y,m,0).getDate();
+  const out=[];
+  for(let day=1; day<=daysInMonth; day++){
+    out.push(`${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`);
+  }
+  return out;
+}
+function getDataDateExtent(){
+  const dates=[...faceData,...fpData,...ghrData]
+    .map(r=>(r.Date||"").toString().slice(0,10))
+    .filter(d=>d.length===10)
+    .sort();
+  if(!dates.length){
+    const today=new Date().toISOString().slice(0,10);
+    return {min:today, max:today};
+  }
+  return {min:dates[0], max:dates[dates.length-1]};
 }
 
 /* ── Mode tabs ── */
@@ -633,6 +675,10 @@ function onReportTypeChange(){
 
   [tSeconds,tPunches].forEach(el=>el.style.display="none");
   tUnit.textContent="";
+
+  // Absent Employees is computed across all sources combined and ignores the mode tabs
+  const modeTabsEl=document.getElementById("modeTabsReports");
+  modeTabsEl.classList.toggle("tabs-disabled", t==="absent");
 
   if(!t){
     sel.classList.add("unselected");
@@ -751,54 +797,36 @@ function minsToTime(mins){
   const m=Math.round(mins%60);
   return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
 }
-/* Returns expected full-day hours for a given date string (YYYY-MM-DD).
-   Saturday: 4h (09:30–13:30). All other days: 8h. */
-function getExpectedHours(dateStr) {
-  if (!dateStr) return 8;
-  const day = new Date(dateStr + "T00:00:00").getDay(); // 0=Sun,6=Sat
-  return day === 6 ? 4 : 8;
-}
 
-/* Status badge that respects Saturday hours */
+/* ── Shared calculation delegates (att-data.js is the single source of truth) ──
+   These wrappers keep the existing call sites/signatures on this page unchanged
+   while ensuring the actual thresholds and rules live in one shared place, so
+   Day View / Employee Lookup / Reports can never disagree with each other. */
+function getExpectedHours(dateStr){
+  return window.AttData ? window.AttData.getExpectedHours(dateStr) : 8;
+}
+function getLoginStatus(timeStr){
+  return window.AttData ? window.AttData.getLoginStatus(timeStr) : null;
+}
 function statusBadgeForDate(hours, dateStr) {
-  const full = getExpectedHours(dateStr);
-  const half = full / 2;
-  if (hours >= full) return `<span class="badge badge-full">Full day</span>`;
-  if (hours >= half) return `<span class="badge badge-half">Half day</span>`;
-  return `<span class="badge badge-short">Short</span>`;
+  const s = window.AttData ? window.AttData.getAttendanceStatus(hours, dateStr) : {cls:"badge-short",label:"Short"};
+  return `<span class="badge ${s.cls}">${s.label}</span>`;
 }
 
-/* Official First In, Last Out, Hours for a name+date (Face + Great HR only, ≥2 rule) */
+/* First In, Last Out, Hours for a name+date — across ALL sources (Face +
+   Fingerprint + Great HR combined). Delegates to the shared layer so this
+   can never drift out of sync with Day View / Employee Lookup again. */
 function getOfficialTimes(name, date) {
-  const officialTimes = punchData
-    .filter(p => p.Name === name && (p.Date||"").slice(0,10) === date
-              && (p.Mode === "face" || p.Mode === "greathr"))
-    .map(p => p.Time).sort();
-  if (officialTimes.length === 0) return { firstIn:"—", lastOut:"—", hours:"—" };
-  if (officialTimes.length === 1) return { firstIn: officialTimes[0].slice(0,5), lastOut:"—", hours:"—" };
-  const firstIn = officialTimes[0].slice(0,5);
-  const lastOut = officialTimes[officialTimes.length-1].slice(0,5);
-  const [fh,fm] = firstIn.split(":").map(Number);
-  const [lh,lm] = lastOut.split(":").map(Number);
-  const hours = Math.round(((lh*60+lm)-(fh*60+fm))/60*100)/100;
-  return { firstIn, lastOut, hours };
+  const t = window.AttData.getCrossModeTimes(punchData, name, date);
+  return { firstIn: t.firstIn, lastOut: t.lastOut, hours: t.hours };
 }
 
 function getTotalPunches(name, date) {
   return punchData.filter(p => p.Name === name && (p.Date||"").slice(0,10) === date).length;
 }
 
-function getLoginStatus(timeStr) {
-  if (!timeStr || timeStr === "—") return null;
-  const [h, m] = timeStr.split(":").map(Number);
-  const mins = h * 60 + m;
-  if (mins < 9 * 60 + 30)  return { color: "var(--green)", tooltip: "Early Login" };
-  if (mins <= 9 * 60 + 45) return { color: "#4a9eff",      tooltip: "On Time" };
-  return                           { color: "var(--amber)", tooltip: "Late Login" };
-}
-
 /* ── Combined Attendance Flags report ── */
-function buildCombinedFlagsReport(flags){
+async function buildCombinedFlagsReport(flags){
   const lateThresh   = timeToMins(document.getElementById("threshLateLoginTime").value||"09:45");
   const earlyThresh  = timeToMins(document.getElementById("threshEarlyLoginTime").value||"09:30");
   const wdFull       = parseFloat(document.getElementById("threshFullWeekday").value)||8;
@@ -844,7 +872,66 @@ function buildCombinedFlagsReport(flags){
       rows.push({...e, Mode:[...e.modes].map(modeLabelShort).join(", "), Reason:reasons.join(", ")});
     }
   });
+
+  if(flags.includes("absent")){
+    const absentResult = await buildAbsentReport();
+    absentResult.rows.forEach(a=>{
+      const key=`${a.Name}||${a.Date}`;
+      if(!map[key]){
+        rows.push({
+          Name:a.Name, ID:a.ID, Date:a.Date,
+          First_In:"—", Last_Out:"—",
+          Hours:0, _officialHours:"—",
+          Mode:"—", Reason:"Absent",
+        });
+      }
+    });
+  }
   return rows;
+}
+
+/* ── Absent Employees report ──
+   Walks every WORKING day (Sundays excluded) in the selected range and asks
+   the shared getDayAttendance() layer — driven by the Employee Master — which
+   employees had zero punches across Face + Fingerprint + Great HR that day.
+   This is deliberately independent of the mode tabs: absence is about total
+   silence across all sources, not any one source. */
+async function buildAbsentReport(){
+  const master = employeeMaster.length ? employeeMaster : await window.AttData.getEmployeeMaster();
+
+  const dfrom=document.getElementById("fDateFrom").value;
+  const dto=document.getElementById("fDateTo").value;
+  const monthSel=document.getElementById("monthFilterReports").value;
+
+  let dateList;
+  if(monthSel){
+    dateList = datesInMonth(monthSel);
+  } else if(dfrom || dto){
+    const ext = getDataDateExtent();
+    dateList = datesBetween(dfrom || ext.min, dto || ext.max);
+  } else {
+    const ext = getDataDateExtent();
+    dateList = datesBetween(ext.min, ext.max);
+  }
+
+  const workingDates = dateList.filter(d => !(window.AttData && window.AttData.isSunday(d)));
+
+  const eid   = document.getElementById("fEmpId").value.trim().toLowerCase();
+  const ename = document.getElementById("fEmpName").value.trim().toLowerCase();
+  const teamSel = document.getElementById("teamFilterReports")?.value || "";
+
+  const rows=[];
+  for(const d of workingDates){
+    const att = await window.AttData.getDayAttendance(d, punchData, master);
+    att.employees.forEach(e=>{
+      if(e.status!=="absent") return;
+      if(eid && !(e.id||"").toString().toLowerCase().includes(eid)) return;
+      if(ename && !(e.name||"").toLowerCase().includes(ename)) return;
+      if(teamSel && (e.team||"")!==teamSel) return;
+      rows.push({ Name:e.name, ID:e.id, Date:d, Team:e.team||"" });
+    });
+  }
+  return { rows, workingDaysChecked: workingDates.length };
 }
 
 /* ── Report info header ── */
@@ -869,7 +956,8 @@ function renderReportInfoHeader(title){
   }else{
     tags.push(`<span class="rih-tag">📅 Date range: <strong>All dates</strong></span>`);
   }
-  tags.push(`<span class="rih-tag">📡 Source: <strong>${modeLabel(currentMode)}</strong></span>`);
+  const sourceLabel = currentReportType==="absent" ? "All Sources (combined)" : modeLabel(currentMode);
+  tags.push(`<span class="rih-tag">📡 Source: <strong>${sourceLabel}</strong></span>`);
   if(eid)  tags.push(`<span class="rih-tag">🔢 Employee ID: <strong>${eid}</strong></span>`);
   if(ename)tags.push(`<span class="rih-tag">👤 Name filter: <strong>${ename}</strong></span>`);
   if(teamSel)tags.push(`<span class="rih-tag">🏷 Team: <strong>${teamSel}</strong></span>`);
@@ -879,7 +967,7 @@ function renderReportInfoHeader(title){
 }
 
 /* ── Summary cards ── */
-function renderSummaryCards(type, rows){
+function renderSummaryCards(type, rows, extra){
   const container=document.getElementById("summaryCards");
   const cards=[];
 
@@ -902,6 +990,16 @@ function renderSummaryCards(type, rows){
     cards.push({label:"Total Day-Records",val:totalDays,sub:"across all sources",c:"#a89fff"});
     cards.push({label:"Avg Hours / Day",val:avgH+"h",sub:"all employees",c:"var(--amber)"});
     cards.push({label:"Total Punches",val:totalPunches,sub:"all sources",c:"var(--green)"});
+  }
+  else if(type==="absent"){
+    const empSet=new Set(rows.map(r=>r.Name));
+    const teamSet=new Set(rows.map(r=>r.Team).filter(Boolean));
+    const uniqueDates=new Set(rows.map(r=>r.Date));
+    const workingDaysChecked = extra && extra.workingDaysChecked ? extra.workingDaysChecked : uniqueDates.size;
+    cards.push({label:"Absences Found",val:rows.length,sub:"employee-days",c:"var(--accent2)"});
+    cards.push({label:"Employees Affected",val:empSet.size,sub:"unique",c:"#a89fff"});
+    cards.push({label:"Working Days Checked",val:workingDaysChecked,sub:"Sundays excluded",c:"var(--amber)"});
+    cards.push({label:"Teams Affected",val:teamSet.size,sub:"distinct teams",c:"var(--green)"});
   }
   else if(type==="single_punch"){
     const empSet=new Set(rows.map(r=>r.Name));
@@ -997,13 +1095,13 @@ function renderReasonPills(reasonText){
 }
 
 /* ── Generate ── */
-function generateReport(){
+async function generateReport(){
   const selectedFlags=[...document.querySelectorAll(".flag-cb:checked")].map(cb=>cb.value);
 
   if(selectedFlags.length){
     currentReportType="flags_combined";
     sortState = {...DEFAULT_SORT[currentReportType]};
-    const rows=buildCombinedFlagsReport(selectedFlags);
+    const rows=await buildCombinedFlagsReport(selectedFlags);
     const headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>First In</th><th>Last Out</th>${sortableTh('hours','Hours')}<th>Source</th><th>Reason</th></tr>`;
     const title="Attendance Flags: "+selectedFlags.map(f=>FLAG_LABELS[f]).join(", ");
 
@@ -1025,146 +1123,164 @@ function generateReport(){
   if(!type)return;
   currentReportType=type;
   sortState = {...DEFAULT_SORT[type]};
-  let src=applyBaseFilters(getSourceData()).map(r=>{
-    const date=(r.Date||"").toString().slice(0,10);
-    const off=getOfficialTimes(r.Name, date);
-    return {
-      ...r,
-      First_In:  off.firstIn,
-      Last_Out:  off.lastOut,
-      Hours:     off.hours==="—" ? 0 : off.hours,
-      _officialHours: off.hours,
-      _totalPunches:  getTotalPunches(r.Name, date),
-    };
-  });
+
   let rows=[];
   let headHtml="";
   let title="";
+  let extra=null;
 
-  if(type==="summary"){
-    title="Attendance Summary";
-    const map={};
-    src.forEach(r=>{
-      const k=r.Name||"—";
-      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",face:0,fp:0,ghr:0,totalH:0,punches:0,days:new Set()};
-      const m=r._mode;
-      if(m==="face")map[k].face++;
-      else if(m==="fingerprint")map[k].fp++;
-      else if(m==="greathr")map[k].ghr++;
-      map[k].totalH+=r.Hours||0;
-      map[k].punches+=r.Total_Punches||0;
-      map[k].days.add(r.Date);
-    });
-    rows=Object.values(map).map(e=>({...e,days:e.days.size,avgH:e.days.size?(e.totalH/e.days.size).toFixed(1):"—"}));
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Total Punches')}</tr>`;
+  if(type==="absent"){
+    title="Absent Employees";
+    const btn=document.getElementById("btnGenerate");
+    const oldLabel=btn.textContent;
+    btn.textContent="⏳ Checking attendance…";
+    btn.disabled=true;
+    const result = await buildAbsentReport();
+    rows = result.rows;
+    extra = { workingDaysChecked: result.workingDaysChecked };
+    btn.textContent=oldLabel;
+    btn.disabled=false;
+    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Team</th><th>Status</th></tr>`;
   }
-  else if(type==="single_punch"){
-    title="Single Punch";
-    rows=src.filter(r=>(r.Total_Punches||0)===1);
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch Time</th><th>Mode</th></tr>`;
-  }
-  else if(type==="fp_without_face"){
-    title="Fingerprint Without Face";
-    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
-    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
-    const faceKeys=new Set(allFace.map(r=>`${r.Name}||${r.Date}`));
-    const seen=new Set();
-    rows=[];
-    allFP.forEach(r=>{
-      const key=`${r.Name}||${r.Date}`;
-      if(!faceKeys.has(key)&&!seen.has(key)){
-        seen.add(key);
-        rows.push({...r,_faceCount:0,_fpCount:r.Total_Punches||1});
-      }
-    });
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>FP First In</th><th>FP Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','FP Punches')}</tr>`;
-  }
-  else if(type==="face_without_fp"){
-    title="Face Without Fingerprint";
-    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
-    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
-    const fpKeys=new Set(allFP.map(r=>`${r.Name}||${r.Date}`));
-    const seen=new Set();
-    rows=[];
-    allFace.forEach(r=>{
-      const key=`${r.Name}||${r.Date}`;
-      if(!fpKeys.has(key)&&!seen.has(key)){
-        seen.add(key);
-        rows.push({...r,_faceCount:r.Total_Punches||1,_fpCount:0});
-      }
-    });
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Face First In</th><th>Face Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','Face Punches')}</tr>`;
-  }
-  else if(type==="duplicate_punch"){
-    title="Duplicate Punch";
-    const threshSecs=parseInt(document.getElementById("thresholdSeconds").value)||30;
-    rows=[];
-    src.forEach(r=>{
-      const fi=r.First_In||"";
-      const lo=r.Last_Out||"";
-      if(!fi||!lo||fi==="—"||lo==="—")return;
-      const m1=punchTimeToMins(fi);
-      const m2=punchTimeToMins(lo);
-      if(m1===null||m2===null)return;
-      const diffSecs=Math.abs(m2-m1)*60;
-      if(diffSecs<=threshSecs){
-        rows.push({...r,_punch1:fi,_punch2:lo,_diffSecs:diffSecs});
-      }
-    });
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch 1</th><th>Punch 2</th><th>Diff (secs)</th><th>Source</th></tr>`;
-  }
-  else if(type==="multiple_punch"){
-    title="Multiple Punch";
-    const threshPunches=parseInt(document.getElementById("thresholdPunches").value)||8;
-    rows=src.filter(r=>(r.Total_Punches||0)>threshPunches);
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}${sortableTh('punches','Total Punches')}${sortableTh('hours','Hours')}<th>Source</th></tr>`;
-  }
-  else if(type==="attendance_pattern"){
-    title="Attendance Pattern";
-    const map={};
-    src.forEach(r=>{
-      const k=r.Name||"—";
-      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",loginMins:[],logoutMins:[],totalH:0,totalPunches:0,days:new Set()};
-      map[k].days.add(r.Date);
-      map[k].totalH+=r.Hours||0;
-      map[k].totalPunches+=r.Total_Punches||0;
-      const lm=punchTimeToMins(r.First_In);
-      if(lm!==null)map[k].loginMins.push(lm);
-      const om=punchTimeToMins(r.Last_Out);
-      if(om!==null)map[k].logoutMins.push(om);
-    });
-    rows=Object.values(map).map(e=>{
-      const days=e.days.size;
-      const avgLoginMins=e.loginMins.length?e.loginMins.reduce((a,b)=>a+b,0)/e.loginMins.length:null;
-      const avgLogoutMins=e.logoutMins.length?e.logoutMins.reduce((a,b)=>a+b,0)/e.logoutMins.length:null;
-      return{
-        Name:e.Name,ID:e.ID,days,
-        avgLoginMins,
-        avgLogoutMins,
-        avgLoginStr:minsToTime(avgLoginMins),
-        avgLogoutStr:minsToTime(avgLogoutMins),
-        avgHours:days?(e.totalH/days).toFixed(1):"—",
-        avgPunches:days?(e.totalPunches/days).toFixed(1):"—",
+  else {
+    let src=applyBaseFilters(getSourceData()).map(r=>{
+      const date=(r.Date||"").toString().slice(0,10);
+      const off=getOfficialTimes(r.Name, date);
+      return {
+        ...r,
+        First_In:  off.firstIn,
+        Last_Out:  off.lastOut,
+        Hours:     off.hours==="—" ? 0 : off.hours,
+        _officialHours: off.hours,
+        _totalPunches:  getTotalPunches(r.Name, date),
       };
     });
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Working Days</th><th>Avg Login</th><th>Avg Logout</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Avg Punches/Day')}</tr>`;
-  }
-  else if(type==="source_comparison"){
-    title="Attendance Source Comparison";
-    const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
-    const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
-    const allGHR =applyBaseFilters(ghrData.map(r=>({...r,_mode:"greathr"})));
-    const map={};
-    const ensureEmp=(r)=>{
-      const k=r.Name||"—";
-      if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",faceDays:0,fpDays:0,ghrDays:0,allDays:new Set()};
-      return map[k];
-    };
-    allFace.forEach(r=>{const e=ensureEmp(r);e.faceDays++;e.allDays.add(r.Date);});
-    allFP.forEach(r=>  {const e=ensureEmp(r);e.fpDays++;  e.allDays.add(r.Date);});
-    allGHR.forEach(r=> {const e=ensureEmp(r);e.ghrDays++; e.allDays.add(r.Date);});
-    rows=Object.values(map).map(e=>({...e,totalDays:e.allDays.size}));
-    headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Face Days</th><th>Fingerprint Days</th><th>Great HR Days</th><th>Total Working Days</th></tr>`;
+
+    if(type==="summary"){
+      title="Attendance Summary";
+      const map={};
+      src.forEach(r=>{
+        const k=r.Name||"—";
+        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",face:0,fp:0,ghr:0,totalH:0,punches:0,days:new Set()};
+        const m=r._mode;
+        if(m==="face")map[k].face++;
+        else if(m==="fingerprint")map[k].fp++;
+        else if(m==="greathr")map[k].ghr++;
+        map[k].totalH+=r.Hours||0;
+        map[k].punches+=r.Total_Punches||0;
+        map[k].days.add(r.Date);
+      });
+      rows=Object.values(map).map(e=>({...e,days:e.days.size,avgH:e.days.size?(e.totalH/e.days.size).toFixed(1):"—"}));
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Days</th><th>Face</th><th>Fingerprint</th><th>Great HR</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Total Punches')}</tr>`;
+    }
+    else if(type==="single_punch"){
+      title="Single Punch";
+      rows=src.filter(r=>(r.Total_Punches||0)===1);
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch Time</th><th>Mode</th></tr>`;
+    }
+    else if(type==="fp_without_face"){
+      title="Fingerprint Without Face";
+      const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+      const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+      const faceKeys=new Set(allFace.map(r=>`${r.Name}||${r.Date}`));
+      const seen=new Set();
+      rows=[];
+      allFP.forEach(r=>{
+        const key=`${r.Name}||${r.Date}`;
+        if(!faceKeys.has(key)&&!seen.has(key)){
+          seen.add(key);
+          rows.push({...r,_faceCount:0,_fpCount:r.Total_Punches||1});
+        }
+      });
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>FP First In</th><th>FP Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','FP Punches')}</tr>`;
+    }
+    else if(type==="face_without_fp"){
+      title="Face Without Fingerprint";
+      const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+      const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+      const fpKeys=new Set(allFP.map(r=>`${r.Name}||${r.Date}`));
+      const seen=new Set();
+      rows=[];
+      allFace.forEach(r=>{
+        const key=`${r.Name}||${r.Date}`;
+        if(!fpKeys.has(key)&&!seen.has(key)){
+          seen.add(key);
+          rows.push({...r,_faceCount:r.Total_Punches||1,_fpCount:0});
+        }
+      });
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Face First In</th><th>Face Last Out</th>${sortableTh('hours','Hours')}${sortableTh('punches','Face Punches')}</tr>`;
+    }
+    else if(type==="duplicate_punch"){
+      title="Duplicate Punch";
+      const threshSecs=parseInt(document.getElementById("thresholdSeconds").value)||30;
+      rows=[];
+      src.forEach(r=>{
+        const fi=r.First_In||"";
+        const lo=r.Last_Out||"";
+        if(!fi||!lo||fi==="—"||lo==="—")return;
+        const m1=punchTimeToMins(fi);
+        const m2=punchTimeToMins(lo);
+        if(m1===null||m2===null)return;
+        const diffSecs=Math.abs(m2-m1)*60;
+        if(diffSecs<=threshSecs){
+          rows.push({...r,_punch1:fi,_punch2:lo,_diffSecs:diffSecs});
+        }
+      });
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}<th>Punch 1</th><th>Punch 2</th><th>Diff (secs)</th><th>Source</th></tr>`;
+    }
+    else if(type==="multiple_punch"){
+      title="Multiple Punch";
+      const threshPunches=parseInt(document.getElementById("thresholdPunches").value)||8;
+      rows=src.filter(r=>(r.Total_Punches||0)>threshPunches);
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th>${sortableTh('date','Date')}${sortableTh('punches','Total Punches')}${sortableTh('hours','Hours')}<th>Source</th></tr>`;
+    }
+    else if(type==="attendance_pattern"){
+      title="Attendance Pattern";
+      const map={};
+      src.forEach(r=>{
+        const k=r.Name||"—";
+        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",loginMins:[],logoutMins:[],totalH:0,totalPunches:0,days:new Set()};
+        map[k].days.add(r.Date);
+        map[k].totalH+=r.Hours||0;
+        map[k].totalPunches+=r.Total_Punches||0;
+        const lm=punchTimeToMins(r.First_In);
+        if(lm!==null)map[k].loginMins.push(lm);
+        const om=punchTimeToMins(r.Last_Out);
+        if(om!==null)map[k].logoutMins.push(om);
+      });
+      rows=Object.values(map).map(e=>{
+        const days=e.days.size;
+        const avgLoginMins=e.loginMins.length?e.loginMins.reduce((a,b)=>a+b,0)/e.loginMins.length:null;
+        const avgLogoutMins=e.logoutMins.length?e.logoutMins.reduce((a,b)=>a+b,0)/e.logoutMins.length:null;
+        return{
+          Name:e.Name,ID:e.ID,days,
+          avgLoginMins,
+          avgLogoutMins,
+          avgLoginStr:minsToTime(avgLoginMins),
+          avgLogoutStr:minsToTime(avgLogoutMins),
+          avgHours:days?(e.totalH/days).toFixed(1):"—",
+          avgPunches:days?(e.totalPunches/days).toFixed(1):"—",
+        };
+      });
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Working Days</th><th>Avg Login</th><th>Avg Logout</th>${sortableTh('hours','Avg Hours')}${sortableTh('punches','Avg Punches/Day')}</tr>`;
+    }
+    else if(type==="source_comparison"){
+      title="Attendance Source Comparison";
+      const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
+      const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
+      const allGHR =applyBaseFilters(ghrData.map(r=>({...r,_mode:"greathr"})));
+      const map={};
+      const ensureEmp=(r)=>{
+        const k=r.Name||"—";
+        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",faceDays:0,fpDays:0,ghrDays:0,allDays:new Set()};
+        return map[k];
+      };
+      allFace.forEach(r=>{const e=ensureEmp(r);e.faceDays++;e.allDays.add(r.Date);});
+      allFP.forEach(r=>  {const e=ensureEmp(r);e.fpDays++;  e.allDays.add(r.Date);});
+      allGHR.forEach(r=> {const e=ensureEmp(r);e.ghrDays++; e.allDays.add(r.Date);});
+      rows=Object.values(map).map(e=>({...e,totalDays:e.allDays.size}));
+      headHtml=`<tr>${sortableTh('employee','Employee')}<th>ID</th><th>Face Days</th><th>Fingerprint Days</th><th>Great HR Days</th><th>Total Working Days</th></tr>`;
+    }
   }
 
   reportRows=[...rows];
@@ -1176,7 +1292,7 @@ function generateReport(){
   document.getElementById("resSearch").value="";
 
   renderReportInfoHeader(title);
-  renderSummaryCards(type, rows);
+  renderSummaryCards(type, rows, extra);
   filterResults();
 }
 
@@ -1252,8 +1368,9 @@ function buildRow(type,r,i){
   const date=(r.Date||"").toString().slice(0,10);
   const safeName=(r.Name||"").replace(/'/g,"\\'");
   const safeId=id.replace(/'/g,"\\'");
-  // Rows with a date get a panel opener; aggregate rows (summary, pattern, top, comparison) do not
-  const hasDate=!!date;
+  // Rows with a date get a panel opener; aggregate rows (summary, pattern, top, comparison) do not.
+  // Absent rows also skip the panel — there are no punches to inspect.
+  const hasDate=!!date && type!=="absent";
   const rowClick=hasDate?`onclick="openPanel('${safeName}','${date}','${safeId}')" style="cursor:pointer"`:"";
 
   if(type==="flags_combined"){
@@ -1280,6 +1397,16 @@ function buildRow(type,r,i){
       <td><span class="mode-pill mode-ghr">${r.ghr}</span></td>
       <td style="font-weight:600;color:var(--amber)">${r.avgH==="—"?r.avgH:r.avgH+"h"}</td>
       <td style="color:var(--muted)">${r.punches}</td>
+    </tr>`;
+  }
+  if(type==="absent"){
+    const teamHtml=r.Team?`<span class="mode-pill mode-all">${r.Team}</span>`:'<span style="color:var(--muted)">—</span>';
+    return`<tr>
+      <td><span class="emp-name">${r.Name}</span></td>
+      <td style="color:var(--muted)">${id}</td>
+      <td style="color:var(--muted)">${formatDate(r.Date)}</td>
+      <td>${teamHtml}</td>
+      <td><span class="badge badge-short">Absent</span></td>
     </tr>`;
   }
   if(type==="single_punch"){
@@ -1361,6 +1488,7 @@ function buildExportRows(){
     const id=r.ID||r["User ID"]||r["Employee No"]||"";
     if(type==="flags_combined")        return[r.Name,id,r.Date,r.First_In,r.Last_Out,r._officialHours==="—"?"":r._officialHours,r.Mode,r.Reason];
     if(type==="summary")               return[r.Name,id,r.days,r.face,r.fp,r.ghr,r.avgH,r.punches];
+    if(type==="absent")                return[r.Name,id,r.Date,r.Team||"","Absent"];
     if(type==="single_punch")          return[r.Name,id,r.Date,r.First_In,r._mode];
     if(type==="fp_without_face")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._fpCount];
     if(type==="face_without_fp")       return[r.Name,id,r.Date,r.First_In,r.Last_Out,r.Hours,r._faceCount];
@@ -1406,13 +1534,10 @@ function exportExcel(){
 function printReport(){window.print();}
 
 function openPanel(name, date, uid) {
-  const allForDay = punchData.filter(p => p.Name===name && (p.Date||"").slice(0,10)===date);
-  const totalPunches = allForDay.length;
-  const officialTimes = allForDay
-    .filter(p => p.Mode==="face" || p.Mode==="greathr")
-    .map(p => p.Time).sort();
-  const firstIn = officialTimes.length>=1 ? officialTimes[0].slice(0,5) : "—";
-  const lastOut = officialTimes.length>=2 ? officialTimes[officialTimes.length-1].slice(0,5) : "—";
+  const t = window.AttData.getCrossModeTimes(punchData, name, date);
+  const firstIn = t.firstIn;
+  const lastOut = t.lastOut;
+  const totalPunches = t.totalPunches;
 
   document.getElementById("panel-name").textContent = name;
   document.getElementById("panel-id").textContent   = uid ? "Employee ID: #"+uid : "";
@@ -1429,7 +1554,7 @@ function openPanel(name, date, uid) {
   if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
   document.getElementById("pe-modes").innerHTML = modes.join("");
 
-  const rows = allForDay.slice().sort((a,b)=>a.Time.localeCompare(b.Time));
+  const rows = punchData.filter(p=>p.Name===name && (p.Date||"").slice(0,10)===date).slice().sort((a,b)=>a.Time.localeCompare(b.Time));
   const total = rows.length;
   document.getElementById("punch-foot").textContent = `${total} punch event${total!==1?"s":""} on this day`;
   const tbody = document.getElementById("punch-tbody");
@@ -1492,6 +1617,7 @@ function clearAll(){
   const sel=document.getElementById("reportType");
   sel.value="";
   sel.classList.add("unselected");
+  document.getElementById("modeTabsReports").classList.remove("tabs-disabled");
   const desc=document.getElementById("reportDesc");
   desc.classList.add("placeholder");
   document.getElementById("reportDescText").textContent="Select a report above to see its description.";
