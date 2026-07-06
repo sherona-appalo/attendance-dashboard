@@ -302,6 +302,7 @@ Promise.all([
   window.AttData ? window.AttData.buildTeamLookup() : Promise.resolve({byId:{},byName:{}}),
 ]).then(([f,fp,g,pd,em,tl])=>{
   faceData=f; fpData=fp; ghrData=g; punchData=pd; employeeMaster=em; teamLookup=tl;
+  window._nameGroups = window.AttData ? window.AttData.getNameGroups(employeeMaster) : {};
   const p=new URLSearchParams(window.location.search);
   const d=p.get("date");
   if(d){document.getElementById("dayPicker").value=d;loadDay();}
@@ -494,12 +495,20 @@ function renderPresentTable(date){
 
   let rows;
   if(currentTab==="all"){
-    // One row per unique employee seen on this date across all sources
+    // One row per unique employee seen on this date across all sources.
+    // Keyed by Employee ID (via nameGroups) so name-spelling variants like
+    // "Dhamodharan G" / "Dhamodharan Gopal" collapse into a single row.
+    const nameGroups = window._nameGroups || {};
     const nameMap={};
     [...faceData,...fpData,...ghrData].forEach(r=>{
       if((r.Date||"").slice(0,10)!==date)return;
       const name=r.Name||"";
-      if(!nameMap[name])nameMap[name]={Name:name, uid:r["User ID"]||r["Employee No"]||""};
+      const norm=name.trim().replace(/\s+/g,' ').toLowerCase();
+      const group=nameGroups[norm];
+      const key = group ? group.id : norm;
+      if(!nameMap[key]){
+        nameMap[key]={ Name: group ? group.displayName : name, uid: group ? group.id : (r["User ID"]||r["Employee No"]||"") };
+      }
     });
     rows=Object.values(nameMap);
   } else {

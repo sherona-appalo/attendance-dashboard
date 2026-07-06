@@ -119,6 +119,33 @@
     });
     return { byId, byName };
   }
+  // Groups Employee Master rows by Employee ID (same logic used inside
+  // getDayAttendance) and returns a lookup from EVERY normalized name
+  // variant -> { id, displayName, normNames }. Lets other pages (like the
+  // Day View table) collapse name-spelling duplicates the same way the
+  // Present/Absent counts already do.
+  function getNameGroups(master) {
+    const groups = {};
+    let noIdCounter = 0;
+    (master || []).forEach(e => {
+      const rawId = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
+      const rawName = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
+      const groupKey = rawId || `__noid_${noIdCounter++}`;
+      if (!groups[groupKey]) {
+        groups[groupKey] = { id: rawId, displayName: rawName, normNames: new Set() };
+      }
+      if (rawName) groups[groupKey].normNames.add(normalizeName(rawName));
+      if (rawName && rawName.length > (groups[groupKey].displayName || '').length) {
+        groups[groupKey].displayName = rawName;
+      }
+    });
+
+    const byNormName = {};
+    Object.values(groups).forEach(g => {
+      g.normNames.forEach(n => { byNormName[n] = g; });
+    });
+    return byNormName;
+  }
 
   async function buildTeamLookup() {
     const master = await getEmployeeMaster();
@@ -304,6 +331,7 @@
     buildTeamLookup,
     getTeam,
     listTeams,
+    getNameGroups,
     isSunday,
     isWorkingDay,
     getCrossModeTimes,
