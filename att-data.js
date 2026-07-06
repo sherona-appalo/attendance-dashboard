@@ -192,6 +192,35 @@
 
     return { firstIn, lastOut, hours, totalPunches, modeCounts };
   }
+  // Same as getCrossModeTimes, but matches against a SET of normalized name
+  // spellings that all belong to the same Employee ID (handles cases like
+  // "Dhamodharan G" / "Dhamodharan Gopal" both being the same person).
+  function getCrossModeTimesForNames(punchData, normNamesSet, date) {
+    const allForDay = (punchData || []).filter(
+      p => normNamesSet.has(normalizeName(p.Name)) && (p.Date || '').slice(0, 10) === date
+    );
+
+    const modeCounts = { face: 0, fingerprint: 0, greathr: 0 };
+    allForDay.forEach(p => { if (modeCounts[p.Mode] !== undefined) modeCounts[p.Mode]++; });
+    const totalPunches = allForDay.length;
+
+    const times = allForDay.map(p => p.Time).filter(Boolean).sort();
+
+    if (times.length === 0) {
+      return { firstIn: '—', lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+    if (times.length === 1) {
+      return { firstIn: times[0].slice(0, 5), lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+
+    const firstIn = times[0].slice(0, 5);
+    const lastOut = times[times.length - 1].slice(0, 5);
+    const [fh, fm] = firstIn.split(':').map(Number);
+    const [lh, lm] = lastOut.split(':').map(Number);
+    const hours = Math.round(((lh * 60 + lm) - (fh * 60 + fm)) / 60 * 100) / 100;
+
+    return { firstIn, lastOut, hours, totalPunches, modeCounts };
+  }
 
   // Present/Absent/Weekend determination for every employee in the Employee
   // Master, for one date. One punch from ANY source is enough to be Present.
@@ -202,18 +231,33 @@
 
     const dayPunches = (punchData || []).filter(p => (p.Date || '').slice(0, 10) === date);
     const namesWithPunch = new Set(dayPunches.map(p => normalizeName(p.Name)));
-    const matchedNormNames = new Set();
 
-    const employees = (master || []).map(e => {
-      const id = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
-      const name = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
-      const normName = normalizeName(name);
+    // Group Employee Master rows by Employee ID, since the same ID can appear
+    // with multiple name spellings (e.g. "Vigneshwaran R," vs "Vigneshwaran.R").
+    // Rows with no Employee ID are kept as their own separate entries.
+    const groups = {};
+    let noIdCounter = 0;
+
+    (master || []).forEach(e => {
+      const rawId = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
+      const rawName = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
       const team = e['Team'] || '';
-      const hasPunch = namesWithPunch.has(normName);
-      if (hasPunch) matchedNormNames.add(normName);
+      const groupKey = rawId || `__noid_${noIdCounter++}`;
 
+      if (!groups[groupKey]) {
+        groups[groupKey] = { id: rawId, displayName: rawName, team, normNames: new Set() };
+      }
+      if (rawName) groups[groupKey].normNames.add(normalizeName(rawName));
+      if (!groups[groupKey].team && team) groups[groupKey].team = team;
+      if (rawName && rawName.length > (groups[groupKey].displayName || '').length) {
+        groups[groupKey].displayName = rawName;
+      }
+    });
+
+    const employees = Object.values(groups).map(g => {
+      const hasPunch = [...g.normNames].some(n => namesWithPunch.has(n));
       const times = hasPunch
-        ? getCrossModeTimes(punchData, name, date)
+        ? getCrossModeTimesForNames(punchData, g.normNames, date)
         : { firstIn: '—', lastOut: '—', hours: '—', totalPunches: 0, modeCounts: { face: 0, fingerprint: 0, greathr: 0 } };
 
       let status;
@@ -221,7 +265,7 @@
       else if (weekend) status = 'weekend';
       else status = 'absent';
 
-      return { id, name, team, status, ...times };
+      return { id: g.id, name: g.displayName, team: g.team, status, ...times };
     });
 
     return { date, isWeekend: weekend, employees };
@@ -262,6 +306,7 @@
     isSunday,
     isWorkingDay,
     getCrossModeTimes,
+    getCrossModeTimesForNames,
     getDayAttendance,
     getLoginStatus,
     getExpectedHours,
