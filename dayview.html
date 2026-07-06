@@ -496,18 +496,21 @@ function renderPresentTable(date){
   let rows;
   if(currentTab==="all"){
     // One row per unique employee seen on this date across all sources.
-    // Keyed by Employee ID (via nameGroups) so name-spelling variants like
-    // "Dhamodharan G" / "Dhamodharan Gopal" collapse into a single row.
-    const nameGroups = window._nameGroups || {};
+    // Keyed by the Employee ID already present on the punch record itself
+    // (confirmed reliable: same ID appears regardless of name spelling),
+    // so "Dhamodharan G" / "Dhamodharan Gopal" collapse into one row.
+    // Falls back to name only for punches with no ID at all.
     const nameMap={};
     [...faceData,...fpData,...ghrData].forEach(r=>{
       if((r.Date||"").slice(0,10)!==date)return;
       const name=r.Name||"";
-      const norm=name.trim().replace(/\s+/g,' ').toLowerCase();
-      const group=nameGroups[norm];
-      const key = group ? group.id : norm;
+      const uid=(r["User ID"]||r["Employee No"]||"").toString().trim();
+      const key = uid || name;
       if(!nameMap[key]){
-        nameMap[key]={ Name: group ? group.displayName : name, uid: group ? group.id : (r["User ID"]||r["Employee No"]||"") };
+        nameMap[key]={ Name:name, uid };
+      } else if(name.length > nameMap[key].Name.length){
+        // prefer the fuller/longer spelling as the display name
+        nameMap[key].Name = name;
       }
     });
     rows=Object.values(nameMap);
