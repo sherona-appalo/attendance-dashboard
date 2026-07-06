@@ -27,6 +27,9 @@
     'punch_details.json':       { store: 'attendance',     key: 'att_punch_details' },
     'employee_master.json':     { store: 'employeeMaster', key: 'master' },
   };
+  function normalizeName(n) {
+    return (n || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+  }
 
   // ── Firestore helpers ────────────────────────────────────────────────────
   // Firestore splits large arrays into chunks (max 1 MB per document).
@@ -111,7 +114,7 @@
     const byId = {}, byName = {};
     (master || []).forEach(e => {
       if (e['Employee ID']) byId[String(e['Employee ID']).trim()] = e['Team'];
-      if (e['Employee Name']) byName[String(e['Employee Name']).trim()] = e['Team'];
+      if (e['Employee Name']) byName[normalizeName(e['Employee Name'])] = e['Team'];
     });
     return { byId, byName };
   }
@@ -125,7 +128,7 @@
   function getTeam(lookup, employeeId, employeeName) {
     if (!lookup) return '';
     const id = employeeId != null ? String(employeeId).trim() : '';
-    const name = employeeName != null ? String(employeeName).trim() : '';
+    const name = employeeName != null ? normalizeName(employeeName) : '';
     if (id && lookup.byId[id]) return lookup.byId[id];
     if (name && lookup.byName[name]) return lookup.byName[name];
     return '';
@@ -163,8 +166,9 @@
   // combined. This must NEVER be filtered by attendance-mode tab — mode
   // tabs only change which punch rows are *displayed*, never these values.
   function getCrossModeTimes(punchData, name, date) {
+    const target = normalizeName(name);
     const allForDay = (punchData || []).filter(
-      p => p.Name === name && (p.Date || '').slice(0, 10) === date
+      p => normalizeName(p.Name) === target && (p.Date || '').slice(0, 10) === date
     );
 
     const modeCounts = { face: 0, fingerprint: 0, greathr: 0 };
@@ -197,13 +201,17 @@
     const weekend = isSunday(date);
 
     const dayPunches = (punchData || []).filter(p => (p.Date || '').slice(0, 10) === date);
-    const namesWithPunch = new Set(dayPunches.map(p => p.Name));
+    const namesWithPunch = new Set(dayPunches.map(p => normalizeName(p.Name)));
+    const matchedNormNames = new Set();
 
     const employees = (master || []).map(e => {
       const id = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
       const name = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
+      const normName = normalizeName(name);
       const team = e['Team'] || '';
-      const hasPunch = namesWithPunch.has(name);
+      const hasPunch = namesWithPunch.has(normName);
+      if (hasPunch) matchedNormNames.add(normName);
+
       const times = hasPunch
         ? getCrossModeTimes(punchData, name, date)
         : { firstIn: '—', lastOut: '—', hours: '—', totalPunches: 0, modeCounts: { face: 0, fingerprint: 0, greathr: 0 } };
@@ -216,14 +224,15 @@
       return { id, name, team, status, ...times };
     });
 
-    // Employees who punched but have no Employee Master record must still
-    // count as present, or Present + Absent will undercount vs the raw
-    // punch-based "All" total shown on the Day View tabs.
-    const masterNames = new Set(employees.map(e => e.name));
-    namesWithPunch.forEach(name => {
-      if (!masterNames.has(name)) {
-        const times = getCrossModeTimes(punchData, name, date);
-        employees.push({ id: '', name, team: '', status: 'present', ...times });
+    // Punches whose name genuinely matches no Employee Master record at all
+    // (real data-entry gaps) still count as present, but no longer inflate
+    // the total by double-counting near-matches that differ only in case/spacing.
+    dayPunches.forEach(p => {
+      const norm = normalizeName(p.Name);
+      if (!matchedNormNames.has(norm)) {
+        matchedNormNames.add(norm);
+        const times = getCrossModeTimes(punchData, p.Name, date);
+        employees.push({ id: '', name: p.Name, team: '', status: 'present', ...times });
       }
     });
 
