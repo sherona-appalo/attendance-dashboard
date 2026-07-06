@@ -1,4 +1,3 @@
-
 /**
  * att-data.js
  * Intercepts fetch() calls for the dashboard JSON files.
