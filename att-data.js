@@ -37,9 +37,20 @@
   // depending on source (face/fingerprint use "User ID", Great HR uses
   // "Employee No"). This is confirmed reliable even when the Name spelling
   // differs between sources for the same person.
+  // Normalizes an Employee ID for comparison. Numeric IDs are stripped of
+  // leading zeros (so "076" and "76" are recognized as the same person) —
+  // alphanumeric IDs (e.g. "SEC_001", "H001", "IN_001") are left untouched
+  // since those aren't meant to be treated as padded numbers.
+  function normalizeId(id) {
+    if (id == null) return '';
+    const s = String(id).trim();
+    if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+    return s;
+  }
+
   function getPunchId(p) {
     const id = p['User ID'] || p['Employee No'];
-    return id != null ? String(id).trim() : '';
+    return id != null ? normalizeId(id) : '';
   }
 
   // ── Firestore helpers ────────────────────────────────────────────────────
@@ -124,7 +135,7 @@
   function buildLookupFromMaster(master) {
     const byId = {}, byName = {};
     (master || []).forEach(e => {
-      if (e['Employee ID']) byId[String(e['Employee ID']).trim()] = e['Team'];
+      if (e['Employee ID']) byId[normalizeId(e['Employee ID'])] = e['Team'];
       if (e['Employee Name']) byName[normalizeName(e['Employee Name'])] = e['Team'];
     });
     return { byId, byName };
@@ -138,7 +149,7 @@
     const groups = {};
     let noIdCounter = 0;
     (master || []).forEach(e => {
-      const rawId = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
+      const rawId = e['Employee ID'] ? normalizeId(e['Employee ID']) : '';
       const rawName = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
       const groupKey = rawId || `__noid_${noIdCounter++}`;
       if (!groups[groupKey]) {
@@ -165,7 +176,7 @@
   // Employee ID is preferred; falls back to Employee Name; returns '' (Unassigned) if no match.
   function getTeam(lookup, employeeId, employeeName) {
     if (!lookup) return '';
-    const id = employeeId != null ? String(employeeId).trim() : '';
+    const id = employeeId != null ? normalizeId(employeeId) : '';
     const name = employeeName != null ? normalizeName(employeeName) : '';
     if (id && lookup.byId[id]) return lookup.byId[id];
     if (name && lookup.byName[name]) return lookup.byName[name];
@@ -386,6 +397,7 @@
     isSunday,
     isWorkingDay,
     getPunchId,
+    normalizeId,
     getCrossModeTimes,
     getCrossModeTimesForNames,
     getCrossModeTimesForId,
