@@ -32,6 +32,15 @@
     return (n || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
   }
 
+  // Punch records carry the Employee ID under different field names
+  // depending on source (face/fingerprint use "User ID", Great HR uses
+  // "Employee No"). This is confirmed reliable even when the Name spelling
+  // differs between sources for the same person.
+  function getPunchId(p) {
+    const id = p['User ID'] || p['Employee No'];
+    return id != null ? String(id).trim() : '';
+  }
+
   // ── Firestore helpers ────────────────────────────────────────────────────
   // Firestore splits large arrays into chunks (max 1 MB per document).
   // We store each dataset as:
@@ -223,6 +232,40 @@
   // Same as getCrossModeTimes, but matches against a SET of normalized name
   // spellings that all belong to the same Employee ID (handles cases like
   // "Dhamodharan G" / "Dhamodharan Gopal" both being the same person).
+  // Matches punches by Employee ID first (reliable across name-spelling
+  // variants); falls back to name matching only for punches that have no
+  // ID field at all.
+  function getCrossModeTimesForId(punchData, id, date, normNamesSet) {
+    const allForDay = (punchData || []).filter(p => {
+      if ((p.Date || '').slice(0, 10) !== date) return false;
+      const pid = getPunchId(p);
+      if (id && pid === id) return true;
+      if (!pid && normNamesSet && normNamesSet.has(normalizeName(p.Name))) return true;
+      return false;
+    });
+
+    const modeCounts = { face: 0, fingerprint: 0, greathr: 0 };
+    allForDay.forEach(p => { if (modeCounts[p.Mode] !== undefined) modeCounts[p.Mode]++; });
+    const totalPunches = allForDay.length;
+
+    const times = allForDay.map(p => p.Time).filter(Boolean).sort();
+
+    if (times.length === 0) {
+      return { firstIn: '—', lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+    if (times.length === 1) {
+      return { firstIn: times[0].slice(0, 5), lastOut: '—', hours: '—', totalPunches, modeCounts };
+    }
+
+    const firstIn = times[0].slice(0, 5);
+    const lastOut = times[times.length - 1].slice(0, 5);
+    const [fh, fm] = firstIn.split(':').map(Number);
+    const [lh, lm] = lastOut.split(':').map(Number);
+    const hours = Math.round(((lh * 60 + lm) - (fh * 60 + fm)) / 60 * 100) / 100;
+
+    return { firstIn, lastOut, hours, totalPunches, modeCounts };
+  }
+
   function getCrossModeTimesForNames(punchData, normNamesSet, date) {
     const allForDay = (punchData || []).filter(
       p => normNamesSet.has(normalizeName(p.Name)) && (p.Date || '').slice(0, 10) === date
@@ -258,7 +301,12 @@
     const weekend = isSunday(date);
 
     const dayPunches = (punchData || []).filter(p => (p.Date || '').slice(0, 10) === date);
-    const namesWithPunch = new Set(dayPunches.map(p => normalizeName(p.Name)));
+    // Primary match: Employee ID (reliable across name-spelling variants).
+    const idsWithPunch = new Set(dayPunches.map(getPunchId).filter(Boolean));
+    // Fallback match: normalized name, only for punches with no ID at all.
+    const namesWithPunchNoId = new Set(
+      dayPunches.filter(p => !getPunchId(p)).map(p => normalizeName(p.Name))
+    );
 
     // Group Employee Master rows by Employee ID, since the same ID can appear
     // with multiple name spellings (e.g. "Vigneshwaran R," vs "Vigneshwaran.R").
@@ -283,9 +331,12 @@
     });
 
     const employees = Object.values(groups).map(g => {
-      const hasPunch = [...g.normNames].some(n => namesWithPunch.has(n));
+      const hasPunch = g.id
+        ? idsWithPunch.has(g.id)
+        : [...g.normNames].some(n => namesWithPunchNoId.has(n));
+
       const times = hasPunch
-        ? getCrossModeTimesForNames(punchData, g.normNames, date)
+        ? getCrossModeTimesForId(punchData, g.id, date, g.normNames)
         : { firstIn: '—', lastOut: '—', hours: '—', totalPunches: 0, modeCounts: { face: 0, fingerprint: 0, greathr: 0 } };
 
       let status;
@@ -331,11 +382,12 @@
     buildTeamLookup,
     getTeam,
     listTeams,
-    getNameGroups,
     isSunday,
     isWorkingDay,
+    getPunchId,
     getCrossModeTimes,
     getCrossModeTimesForNames,
+    getCrossModeTimesForId,
     getDayAttendance,
     getLoginStatus,
     getExpectedHours,
