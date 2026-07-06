@@ -216,6 +216,17 @@
       return { id, name, team, status, ...times };
     });
 
+    // Employees who punched but have no Employee Master record must still
+    // count as present, or Present + Absent will undercount vs the raw
+    // punch-based "All" total shown on the Day View tabs.
+    const masterNames = new Set(employees.map(e => e.name));
+    namesWithPunch.forEach(name => {
+      if (!masterNames.has(name)) {
+        const times = getCrossModeTimes(punchData, name, date);
+        employees.push({ id: '', name, team: '', status: 'present', ...times });
+      }
+    });
+
     return { date, isWeekend: weekend, employees };
   }
 
