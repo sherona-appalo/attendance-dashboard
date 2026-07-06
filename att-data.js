@@ -224,18 +224,6 @@
       return { id, name, team, status, ...times };
     });
 
-    // Punches whose name genuinely matches no Employee Master record at all
-    // (real data-entry gaps) still count as present, but no longer inflate
-    // the total by double-counting near-matches that differ only in case/spacing.
-    dayPunches.forEach(p => {
-      const norm = normalizeName(p.Name);
-      if (!matchedNormNames.has(norm)) {
-        matchedNormNames.add(norm);
-        const times = getCrossModeTimes(punchData, p.Name, date);
-        employees.push({ id: '', name: p.Name, team: '', status: 'present', ...times });
-      }
-    });
-
     return { date, isWeekend: weekend, employees };
   }
 
