@@ -723,7 +723,7 @@ function renderTable(){
     const totalPunches  = row._totalPunches;
     const ls = getLoginStatus(firstIn);
     const firstInHtml = ls
-      ? `<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${firstIn}</span>`
+      ? `<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${window.AttData.formatTime12h(firstIn)}</span>`
       : `<span style="color:var(--muted)">—</span>`;
 
     const srcPills=[];
@@ -736,7 +736,7 @@ function renderTable(){
       <td>${i+1}</td>
       <td><div class="date-val">${formatDate(row.date)}</div></td>
       <td>${firstInHtml}</td>
-      <td class="t-out">${lastOut}</td>
+      <td class="t-out">${window.AttData.formatTime12h(lastOut)}</td>
       <td style="font-weight:600">${hours === "—" ? "—" : hours+"h"}</td>
       <td class="pnch">${totalPunches}</td>
       <td><div class="modes-cell">${srcPills.join("")}</div></td>
@@ -824,8 +824,8 @@ function openPanel(name,date,uid){
   if(ghrData.some(r=>empMatches(r)&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
   document.getElementById("pe-modes").innerHTML=modes.join("");
 
-  document.getElementById("ps-firstin").textContent=firstIn;
-  document.getElementById("ps-lastout").textContent=lastOut;
+  document.getElementById("ps-firstin").textContent=window.AttData.formatTime12h(firstIn);
+  document.getElementById("ps-lastout").textContent=window.AttData.formatTime12h(lastOut);
   document.getElementById("ps-punches").textContent=totalPunches;
 
   renderPunchTable();
@@ -856,7 +856,7 @@ function renderPunchTable(){
       :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
     return`<tr>
       <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
-      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${window.AttData.formatTime12h(p.Time)}</td>
       <td style="font-size:13px">${label}</td>
       <td>${mp}</td>
       <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
@@ -912,8 +912,7 @@ function getEmpExportRows() {
     const status = hours === "—" ? "—" : hoursNum >= full ? "Full day" : hoursNum >= half ? "Half day" : "Short";
     const punches = row._totalPunches;
     const sources = [row.face?"Face":"", row.fp?"Fingerprint":"", row.ghr?"Great HR":""].filter(Boolean).join(", ");
-    return [uid, name, selectedEmp.team||"", row.date, firstIn, lastOut, hours === "—" ? "" : hours, punches, status, sources];
-  });
+    return [uid, name, selectedEmp.team||"", row.date, window.AttData.formatTime12h(firstIn), window.AttData.formatTime12h(lastOut), hours === "—" ? "" : hours, punches, status, sources];  });
   return { headers, dataRows };
 }
 
