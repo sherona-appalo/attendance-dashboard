@@ -573,7 +573,7 @@ function renderPresentTable(date){
     const pnchHtml=`<span class="pnch-mode">${r._modePunches}</span><span class="pnch-sep">/</span><span class="pnch-total">${r._totalPunches}</span>`;
     const ls=getLoginStatus(r._firstIn);
     const firstInHtml=ls
-      ?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r._firstIn}</span>`
+      ?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${window.AttData.formatTime12h(r._firstIn)}</span>`
       :`<span style="color:var(--muted)">—</span>`;
     const team=getTeamFor(uid, r.Name);
     const teamHtml=team?`<span class="team-pill">${team}</span>`:`<span style="color:var(--muted)">—</span>`;
@@ -583,7 +583,7 @@ function renderPresentTable(date){
       <td><div class="emp">${r.Name||"—"}</div></td>
       <td>${teamHtml}</td>
       <td>${firstInHtml}</td>
-      <td class="t-out">${r._lastOut}</td>
+      <td class="t-out">${window.AttData.formatTime12h(r._lastOut)}</td>
       <td style="font-weight:600">${h==="—"?"—":h+"h"}</td>
       <td class="pnch">${pnchHtml}</td>
       <td><span class="badge ${cls}">${label}</span></td>
@@ -664,8 +664,8 @@ function openPanel(name, date, uid){
   if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
   document.getElementById("pe-modes").innerHTML=modes.join("");
 
-  document.getElementById("ps-firstin").textContent=firstIn;
-  document.getElementById("ps-lastout").textContent=lastOut;
+  document.getElementById("ps-firstin").textContent=window.AttData.formatTime12h(firstIn);
+  document.getElementById("ps-lastout").textContent=window.AttData.formatTime12h(lastOut);
   document.getElementById("ps-punches").textContent=totalPunches;
 
   renderPunchTable();
@@ -705,7 +705,7 @@ function renderPunchTable(){
       :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
     return`<tr>
       <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
-      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${window.AttData.formatTime12h(p.Time)}</td>
       <td style="font-size:13px">${label}</td>
       <td>${mp}</td>
       <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
@@ -793,7 +793,7 @@ function getDayExportRows() {
     const half=full/2;
     const status=hoursNum>=full?"Full day":hoursNum>=half?"Half day":"Short";
     const team=getTeamFor(uid, r.Name);
-    return[uid,r.Name||"",team,date,r._firstIn,r._lastOut,h==="—"?"":h,r._totalPunches,h==="—"?"—":status];
+    return[uid,r.Name||"",team,date,window.AttData.formatTime12h(r._firstIn),window.AttData.formatTime12h(r._lastOut),h==="—"?"":h,r._totalPunches,h==="—"?"—":status];
   });
   return {headers, dataRows};
 }
