@@ -655,21 +655,32 @@ if (!chunks.empty) {
 
   // Merge by Employee ID (fallback Employee Name). Existing employees not present
   // in the new upload are left completely unchanged. No one is ever removed.
+  // Normalizes an Employee ID the same way att-data.js does (strips leading
+  // zeros from purely numeric IDs, leaves alphanumeric IDs like "SEC_001"
+  // untouched) so "076" and "76" are always recognized as the same person,
+  // even across separate Employee Master uploads.
+  function normalizeEmpId(id) {
+    const s = String(id||'').trim();
+    if (/^\d+$/.test(s)) return String(parseInt(s, 10));
+    return s;
+  }
+
   function mergeEmployeeMaster(existing, incoming) {
     const byId = {};
     const byName = {};
     existing.forEach(e => {
-      if (e['Employee ID']) byId[e['Employee ID']] = e;
+      if (e['Employee ID']) byId[normalizeEmpId(e['Employee ID'])] = e;
       else if (e['Employee Name']) byName[e['Employee Name']] = e;
     });
     incoming.forEach(inc => {
       let key = null, bucket = null;
-      if (inc['Employee ID']) { key = inc['Employee ID']; bucket = byId; }
+      if (inc['Employee ID']) { key = normalizeEmpId(inc['Employee ID']); bucket = byId; }
       else if (inc['Employee Name']) { key = inc['Employee Name']; bucket = byName; }
       if (!key) return;
       if (bucket[key]) {
-        // Update existing employee's info (e.g. Team change)
-        bucket[key] = Object.assign({}, bucket[key], inc);
+        // Update existing employee's info (e.g. Team change) — keep whichever
+        // Employee ID formatting was already stored, just refresh Name/Team.
+        bucket[key] = Object.assign({}, bucket[key], inc, { 'Employee ID': bucket[key]['Employee ID'] });
       } else {
         // New employee
         bucket[key] = inc;
