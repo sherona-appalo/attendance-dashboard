@@ -594,13 +594,19 @@ function populateMonthFilterReports(){
 /* ── Date-range helpers (used by the Absent Employees report, which must
    walk every working day in the selected range rather than just the days
    that already have punch rows) ── */
+function formatLocalDate(d){
+  const y=d.getFullYear();
+  const m=String(d.getMonth()+1).padStart(2,"0");
+  const day=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${day}`;
+}
 function datesBetween(from, to){
   const out=[];
   if(!from||!to) return out;
   let d=new Date(from+"T00:00:00");
   const end=new Date(to+"T00:00:00");
   while(d<=end){
-    out.push(d.toISOString().slice(0,10));
+    out.push(formatLocalDate(d));
     d.setDate(d.getDate()+1);
   }
   return out;
@@ -724,6 +730,14 @@ function getTeamFor(uid,name){
   return window.AttData?window.AttData.getTeam(teamLookup, uid, name):"";
 }
 
+// Canonical Employee ID for any record (summary/pattern/flags rows all carry
+// "User ID" or "Employee No" depending on source). Used to group by the
+// same person even when their Name is spelled differently across sources.
+function getRecId(r){
+  const raw = r["User ID"] || r["Employee No"] || r.ID || "";
+  return window.AttData ? window.AttData.normalizeId(raw) : raw.toString().trim();
+}
+
 function applyBaseFilters(rows){
   const eid   =document.getElementById("fEmpId").value.trim().toLowerCase();
   const ename =document.getElementById("fEmpName").value.trim().toLowerCase();
@@ -837,7 +851,7 @@ async function buildCombinedFlagsReport(flags){
   src.forEach(r=>{
     const date=(r.Date||"").toString().slice(0,10);
     if(!date)return;
-    const key=`${r.Name}||${date}`;
+    const key=`${getRecId(r)||r.Name}||${date}`;
     if(!map[key]){
       const off=getOfficialTimes(r.Name,date);
       map[key]={
@@ -1160,8 +1174,8 @@ async function generateReport(){
       title="Attendance Summary";
       const map={};
       src.forEach(r=>{
-        const k=r.Name||"—";
-        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",face:0,fp:0,ghr:0,totalH:0,punches:0,days:new Set()};
+        const k=getRecId(r)||r.Name||"—";
+        if(!map[k])map[k]={Name:r.Name,ID:r["User ID"]||r["Employee No"]||"",face:0,fp:0,ghr:0,totalH:0,punches:0,days:new Set()};
         const m=r._mode;
         if(m==="face")map[k].face++;
         else if(m==="fingerprint")map[k].fp++;
@@ -1182,11 +1196,11 @@ async function generateReport(){
       title="Fingerprint Without Face";
       const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
       const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
-      const faceKeys=new Set(allFace.map(r=>`${r.Name}||${r.Date}`));
+      const faceKeys=new Set(allFace.map(r=>`${getRecId(r)||r.Name}||${r.Date}`));
       const seen=new Set();
       rows=[];
       allFP.forEach(r=>{
-        const key=`${r.Name}||${r.Date}`;
+        const key=`${getRecId(r)||r.Name}||${r.Date}`;
         if(!faceKeys.has(key)&&!seen.has(key)){
           seen.add(key);
           rows.push({...r,_faceCount:0,_fpCount:r.Total_Punches||1});
@@ -1198,11 +1212,11 @@ async function generateReport(){
       title="Face Without Fingerprint";
       const allFace=applyBaseFilters(faceData.map(r=>({...r,_mode:"face"})));
       const allFP  =applyBaseFilters(fpData.map(r=>({...r,_mode:"fingerprint"})));
-      const fpKeys=new Set(allFP.map(r=>`${r.Name}||${r.Date}`));
+      const fpKeys=new Set(allFP.map(r=>`${getRecId(r)||r.Name}||${r.Date}`));
       const seen=new Set();
       rows=[];
       allFace.forEach(r=>{
-        const key=`${r.Name}||${r.Date}`;
+        const key=`${getRecId(r)||r.Name}||${r.Date}`;
         if(!fpKeys.has(key)&&!seen.has(key)){
           seen.add(key);
           rows.push({...r,_faceCount:r.Total_Punches||1,_fpCount:0});
@@ -1238,8 +1252,8 @@ async function generateReport(){
       title="Attendance Pattern";
       const map={};
       src.forEach(r=>{
-        const k=r.Name||"—";
-        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",loginMins:[],logoutMins:[],totalH:0,totalPunches:0,days:new Set()};
+        const k=getRecId(r)||r.Name||"—";
+        if(!map[k])map[k]={Name:r.Name,ID:r["User ID"]||r["Employee No"]||"",loginMins:[],logoutMins:[],totalH:0,totalPunches:0,days:new Set()};
         map[k].days.add(r.Date);
         map[k].totalH+=r.Hours||0;
         map[k].totalPunches+=r.Total_Punches||0;
@@ -1271,8 +1285,8 @@ async function generateReport(){
       const allGHR =applyBaseFilters(ghrData.map(r=>({...r,_mode:"greathr"})));
       const map={};
       const ensureEmp=(r)=>{
-        const k=r.Name||"—";
-        if(!map[k])map[k]={Name:k,ID:r["User ID"]||r["Employee No"]||"",faceDays:0,fpDays:0,ghrDays:0,allDays:new Set()};
+        const k=getRecId(r)||r.Name||"—";
+        if(!map[k])map[k]={Name:r.Name,ID:r["User ID"]||r["Employee No"]||"",faceDays:0,fpDays:0,ghrDays:0,allDays:new Set()};
         return map[k];
       };
       allFace.forEach(r=>{const e=ensureEmp(r);e.faceDays++;e.allDays.add(r.Date);});
