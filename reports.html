@@ -807,9 +807,11 @@ function punchTimeToMins(t){
 /* Format minutes as HH:MM */
 function minsToTime(mins){
   if(mins===null||isNaN(mins))return"—";
-  const h=Math.floor(mins/60)%24;
+  const h24=Math.floor(mins/60)%24;
   const m=Math.round(mins%60);
-  return`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}`;
+  const period=h24>=12?"PM":"AM";
+  let h12=h24%12; if(h12===0)h12=12;
+  return`${h12}:${String(m).padStart(2,"0")} ${period}`;
 }
 
 /* ── Shared calculation delegates (att-data.js is the single source of truth) ──
@@ -1389,13 +1391,13 @@ function buildRow(type,r,i){
 
   if(type==="flags_combined"){
     const ls=getLoginStatus(r.First_In);
-    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${r.First_In}</span>`:(r.First_In||"—");
+    const firstInHtml=ls?`<span style="color:${ls.color};font-weight:600;cursor:default" title="${ls.tooltip}">${window.AttData.formatTime12h(r.First_In)}</span>`:(r.First_In?window.AttData.formatTime12h(r.First_In):"—");
     return`<tr ${rowClick}>
       <td><span class="emp-name">${r.Name}</span></td>
       <td style="color:var(--muted)">${id}</td>
       <td style="color:var(--muted)">${formatDate(r.Date)}</td>
       <td>${firstInHtml}</td>
-      <td class="t-out">${r.Last_Out||"—"}</td>
+      <td class="t-out">${window.AttData.formatTime12h(r.Last_Out)||"—"}</td>
       <td style="font-weight:600">${r._officialHours==="—"?"—":r._officialHours+"h"}</td>
       <td style="color:var(--muted);font-size:12px">${r.Mode}</td>
       <td>${renderReasonPills(r.Reason)}</td>
@@ -1428,7 +1430,7 @@ function buildRow(type,r,i){
       <td><span class="emp-name">${r.Name}</span></td>
       <td style="color:var(--muted)">${id}</td>
       <td style="color:var(--muted)">${formatDate(r.Date)}</td>
-      <td class="t-in">${r.First_In||"—"}</td>
+      <td class="t-in">${window.AttData.formatTime12h(r.First_In)||"—"}</td>
       <td>${modePill(r._mode)}</td>
     </tr>`;
   }
@@ -1439,8 +1441,8 @@ function buildRow(type,r,i){
       <td><span class="emp-name">${r.Name}</span></td>
       <td style="color:var(--muted)">${id}</td>
       <td style="color:var(--muted)">${formatDate(r.Date)}</td>
-      <td class="t-in">${r.First_In||"—"}</td>
-      <td class="t-out">${r.Last_Out||"—"}</td>
+      <td class="t-in">${window.AttData.formatTime12h(r.First_In)||"—"}</td>
+      <td class="t-out">${window.AttData.formatTime12h(r.Last_Out)||"—"}</td>
       <td style="font-weight:600">${off.hours==="—"?"—":off.hours+"h"}</td>
       <td style="color:var(--muted)">${countLabel}</td>
     </tr>`;
@@ -1450,8 +1452,8 @@ function buildRow(type,r,i){
       <td><span class="emp-name">${r.Name}</span></td>
       <td style="color:var(--muted)">${id}</td>
       <td style="color:var(--muted)">${formatDate(r.Date)}</td>
-      <td class="t-in">${r._punch1||"—"}</td>
-      <td class="t-in">${r._punch2||"—"}</td>
+      <td class="t-in">${window.AttData.formatTime12h(r._punch1)||"—"}</td>
+      <td class="t-in">${window.AttData.formatTime12h(r._punch2)||"—"}</td>
       <td style="font-weight:600;color:var(--accent2)">${r._diffSecs}s</td>
       <td>${modePill(r._mode)}</td>
     </tr>`;
@@ -1558,8 +1560,8 @@ function openPanel(name, date, uid) {
   document.getElementById("pe-name").textContent    = name;
   document.getElementById("pe-id").textContent      = uid ? "#"+uid : "No ID on record";
   document.getElementById("panel-day-label").textContent = "📅 "+formatDateLong(date);
-  document.getElementById("ps-firstin").textContent = firstIn;
-  document.getElementById("ps-lastout").textContent = lastOut;
+  document.getElementById("ps-firstin").textContent = window.AttData.formatTime12h(firstIn);
+  document.getElementById("ps-lastout").textContent = window.AttData.formatTime12h(lastOut);
   document.getElementById("ps-punches").textContent = totalPunches;
 
   const modes=[];
@@ -1586,7 +1588,7 @@ function openPanel(name, date, uid) {
         :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
       return`<tr>
         <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
-        <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+        <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${window.AttData.formatTime12h(p.Time)}</td>
         <td style="font-size:13px">${label}</td>
         <td>${mp}</td>
         <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
