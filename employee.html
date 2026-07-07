@@ -375,6 +375,18 @@ let selectedEmp=null;
 let acFocusIdx=-1;
 let panelContext=null;
 
+// Matches any record (face/fp/ghr summary row or punch row) to the
+// currently selected employee. Employee ID is checked first (reliable
+// across name-spelling variants) — name is only used as a fallback for
+// records that have no ID at all.
+function empMatches(r){
+  if(!selectedEmp) return false;
+  const id = window.AttData ? window.AttData.getPunchId(r) : ((r["User ID"]||r["Employee No"]||"").toString().trim());
+  if(id) return selectedEmp.ids.includes(id);
+  const nm=(r.Name||"").trim().toLowerCase();
+  return selectedEmp.normNames && selectedEmp.normNames.has(nm);
+}
+
 /* ── Sort state (replaces old Sort dropdown) ──
    column: 'date' | 'hours' | 'punches'
    direction: 'asc' | 'desc' */
@@ -398,26 +410,42 @@ Promise.all([
 
 /* ── Build unified employee list ── */
 function buildEmployeeList(){
-  const map={};
+  const norm = n => (n||"").toString().trim().replace(/\s+/g," ").toLowerCase();
+  const normId = window.AttData ? window.AttData.normalizeId : (id => (id||"").toString().trim());
+  const groups={};
+
   const add=(src,idCol,type)=>{
     src.forEach(r=>{
       const name=(r.Name||"").trim();
-      const uid=(r[idCol]||"").toString().trim();
-      if(!name)return;
-      if(!map[name])map[name]={name,ids:new Set(),hasFace:false,hasFP:false,hasGHR:false};
-      if(uid)map[name].ids.add(uid);
-      if(type==="face")map[name].hasFace=true;
-      if(type==="fp")  map[name].hasFP=true;
-      if(type==="ghr") map[name].hasGHR=true;
+      const rawUid=(r[idCol]||"").toString().trim();
+      const uid=rawUid?normId(rawUid):"";
+      if(!name && !uid)return;
+      // Group by Employee ID when present — this is what makes name-spelling
+      // variants like "Dhamodharan G" / "Dhamodharan Gopal" (same ID) collapse
+      // into ONE entry. Falls back to grouping by name only when no ID exists.
+      const key = uid || `__noid_${norm(name)}`;
+      if(!groups[key]){
+        groups[key]={ name:"", ids:new Set(), normNames:new Set(), hasFace:false,hasFP:false,hasGHR:false };
+      }
+      const g=groups[key];
+      if(uid) g.ids.add(uid);
+      if(name){
+        g.normNames.add(norm(name));
+        if(name.length>g.name.length) g.name=name; // prefer the fuller spelling for display
+      }
+      if(type==="face")g.hasFace=true;
+      if(type==="fp")  g.hasFP=true;
+      if(type==="ghr") g.hasGHR=true;
     });
   };
   add(faceData,"User ID","face");
   add(fpData,"User ID","fp");
   add(ghrData,"Employee No","ghr");
-  allEmployees=Object.values(map).map(e=>{
-    const ids=[...e.ids];
-    const team = window.AttData ? window.AttData.getTeam(teamLookup, ids[0]||"", e.name) : "";
-    return {...e, ids, team};
+
+  allEmployees=Object.values(groups).map(g=>{
+    const ids=[...g.ids];
+    const team = window.AttData ? window.AttData.getTeam(teamLookup, ids[0]||"", g.name) : "";
+    return { name:g.name, ids, normNames:g.normNames, hasFace:g.hasFace, hasFP:g.hasFP, hasGHR:g.hasGHR, team };
   }).sort((a,b)=>a.name.localeCompare(b.name));
 }
 
@@ -429,6 +457,7 @@ function onSearchInput(){
   if(!q){ac.style.display="none";return;}
   const matches=allEmployees.filter(e=>{
     if(e.name.toLowerCase().includes(q))return true;
+    if(e.normNames && [...e.normNames].some(n=>n.includes(q)))return true;
     if(e.ids.some(id=>id.toLowerCase().includes(q)))return true;
     return false;
   }).slice(0,12);
@@ -552,10 +581,9 @@ function renderProfile(){
 
 /* ── Render stat cards ── */
 function renderStats(from,to,month){
-  const name=selectedEmp.name;
-  const faceRecs=faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
-  const fpRecs  =fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
-  const ghrRecs =ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month));
+  const faceRecs=faceData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month));
+  const fpRecs  =fpData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month));
+  const ghrRecs =ghrData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month));
 
   const allDates=new Set([
     ...faceRecs.map(r=>r.Date),
@@ -564,16 +592,15 @@ function renderStats(from,to,month){
   ]);
   const totalDays=allDates.size;
 
-  const facePunches=punchData.filter(p=>p.Name===name&&p.Mode==="face"&&inRange(p.Date,from,to,month)).length;
-  const fpPunches  =punchData.filter(p=>p.Name===name&&p.Mode==="fingerprint"&&inRange(p.Date,from,to,month)).length;
-  const ghrPunches =punchData.filter(p=>p.Name===name&&p.Mode==="greathr"&&inRange(p.Date,from,to,month)).length;
-
+  const facePunches=punchData.filter(p=>empMatches(p)&&p.Mode==="face"&&inRange(p.Date,from,to,month)).length;
+  const fpPunches  =punchData.filter(p=>empMatches(p)&&p.Mode==="fingerprint"&&inRange(p.Date,from,to,month)).length;
+  const ghrPunches =punchData.filter(p=>empMatches(p)&&p.Mode==="greathr"&&inRange(p.Date,from,to,month)).length;
   // Avg hours — computed from punchData first/last times per day (cross-mode)
   let totalHours=0;
   let daysWithPunches=0;
   allDates.forEach(date=>{
     const officialTimes=punchData
-      .filter(p=>p.Name===name&&(p.Date||"").slice(0,10)===date
+      .filter(p=>empMatches(p)&&(p.Date||"").slice(0,10)===date
                 &&(p.Mode==="face"||p.Mode==="greathr"))
       .map(p=>p.Time).sort();
     if(officialTimes.length>=2){
@@ -639,7 +666,6 @@ function updateSortIndicators(){
 /* ── Render daily table ── */
 function renderTable(){
   if(!selectedEmp)return;
-  const name=selectedEmp.name;
   const from=document.getElementById("filterFrom").value;
   const to  =document.getElementById("filterTo").value;
   const month=document.getElementById("monthFilter").value;
@@ -653,14 +679,14 @@ function renderTable(){
     if(!dateMap[d])dateMap[d]={date:d,face:null,fp:null,ghr:null};
     dateMap[d][src]=r;
   };
-  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
-  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
-  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
+  faceData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
+  fpData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
+  ghrData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
 
   let rows=Object.values(dateMap).map(row=>({
     ...row,
-    _hours: crossModeHours(row, name),
-    _totalPunches: countPunches(name, row.date)
+    _hours: crossModeHours(row),
+    _totalPunches: countPunches(row.date)
   }));
 
   rows.sort((a,b)=>{
@@ -692,8 +718,8 @@ function renderTable(){
     const hours    = row._hours;
     const hoursNum = (hours === "—" || hours === undefined) ? 0 : Number(hours);
     const [cls,label] = statusBadgeForDate(hoursNum, row.date);
-    const firstIn      = crossModeFirstIn(name, row.date);
-    const lastOut       = crossModeLastOut(name, row.date);
+    const firstIn      = crossModeFirstIn(row.date);
+    const lastOut       = crossModeLastOut(row.date);
     const totalPunches  = row._totalPunches;
     const ls = getLoginStatus(firstIn);
     const firstInHtml = ls
@@ -706,7 +732,7 @@ function renderTable(){
     if(row.ghr)  srcPills.push(`<span class="mode-pill mode-ghr"  style="font-size:11px;padding:2px 8px">📱</span>`);
 
     const uid = selectedEmp.ids[0]||"";
-    return`<tr onclick="openPanel('${name.replace(/'/g,"\\'")}','${row.date}','${uid.toString().replace(/'/g,"\\'")}')">
+    return`<tr onclick="openPanel('${selectedEmp.name.replace(/'/g,"\\'")}','${row.date}','${uid.toString().replace(/'/g,"\\'")}')">
       <td>${i+1}</td>
       <td><div class="date-val">${formatDate(row.date)}</div></td>
       <td>${firstInHtml}</td>
@@ -732,10 +758,9 @@ function inRange(dateStr,from,to,month){
  * Compute hours from earliest-to-latest punch across ALL modes.
  * Falls back to max of summary records if punchData has nothing.
  */
-function crossModeHours(row, name) {
-  const empName = name || selectedEmp?.name;
+function crossModeHours(row) {
   const officialTimes = punchData
-    .filter(p => p.Name === empName && (p.Date||"").slice(0,10) === row.date
+    .filter(p => empMatches(p) && (p.Date||"").slice(0,10) === row.date
               && (p.Mode === "face" || p.Mode === "greathr"))
     .map(p => p.Time).sort();
   if (officialTimes.length >= 2) {
@@ -750,9 +775,9 @@ function crossModeHours(row, name) {
  * First In = earliest punch across ALL modes from punchData.
  * Falls back to earliest of summary First_In values.
  */
-function crossModeFirstIn(name, date) {
+function crossModeFirstIn(date) {
   const officialTimes = punchData
-    .filter(p => p.Name === name && (p.Date||"").slice(0,10) === date
+    .filter(p => empMatches(p) && (p.Date||"").slice(0,10) === date
               && (p.Mode === "face" || p.Mode === "greathr"))
     .map(p => p.Time).sort();
   return officialTimes.length >= 1 ? officialTimes[0].slice(0,5) : "—";
@@ -762,16 +787,16 @@ function crossModeFirstIn(name, date) {
  * Last Out = latest punch across ALL modes from punchData.
  * Falls back to latest of summary Last_Out values.
  */
-function crossModeLastOut(name, date) {
+function crossModeLastOut(date) {
   const officialTimes = punchData
-    .filter(p => p.Name === name && (p.Date||"").slice(0,10) === date
+    .filter(p => empMatches(p) && (p.Date||"").slice(0,10) === date
               && (p.Mode === "face" || p.Mode === "greathr"))
     .map(p => p.Time).sort();
   return officialTimes.length >= 2 ? officialTimes[officialTimes.length-1].slice(0,5) : "—";
 }
 
-function countPunches(name,date){
-  return punchData.filter(p=>p.Name===name&&(p.Date||"").slice(0,10)===date).length;
+function countPunches(date){
+  return punchData.filter(p=>empMatches(p)&&(p.Date||"").slice(0,10)===date).length;
 }
 function formatDate(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short",day:"2-digit",month:"short",year:"numeric"});}
 function formatDateLong(d){if(!d)return"—";return new Date(d+"T00:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});}
@@ -779,7 +804,7 @@ function formatDateLong(d){if(!d)return"—";return new Date(d+"T00:00:00").toLo
 /* ── Panel ── */
 function openPanel(name,date,uid){
   panelContext={name,date,uid};
-  const allForDay=punchData.filter(p=>p.Name===name&&(p.Date||"").slice(0,10)===date);
+  const allForDay=punchData.filter(p=>empMatches(p)&&(p.Date||"").slice(0,10)===date);
   const totalPunches=allForDay.length;
   const officialTimes=allForDay
     .filter(p=>p.Mode==="face"||p.Mode==="greathr")
@@ -794,9 +819,9 @@ function openPanel(name,date,uid){
   document.getElementById("panel-day-label").textContent="📅 "+formatDateLong(date);
 
   const modes=[];
-  if(faceData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date)) modes.push(`<span class="mode-pill mode-face">👤 Face</span>`);
-  if(fpData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`);
-  if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
+  if(faceData.some(r=>empMatches(r)&&(r.Date||"").slice(0,10)===date)) modes.push(`<span class="mode-pill mode-face">👤 Face</span>`);
+  if(fpData.some(r=>empMatches(r)&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-fp">🖐 Fingerprint</span>`);
+  if(ghrData.some(r=>empMatches(r)&&(r.Date||"").slice(0,10)===date))  modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
   document.getElementById("pe-modes").innerHTML=modes.join("");
 
   document.getElementById("ps-firstin").textContent=firstIn;
@@ -810,8 +835,8 @@ function openPanel(name,date,uid){
 
 function renderPunchTable(){
   if(!panelContext)return;
-  const {name,date}=panelContext;
-  let rows=punchData.filter(p=>p.Name===name&&(p.Date||"").slice(0,10)===date);
+  const {date}=panelContext;
+  let rows=punchData.filter(p=>empMatches(p)&&(p.Date||"").slice(0,10)===date);
   rows.sort((a,b)=>a.Time.localeCompare(b.Time));
   document.getElementById("punch-foot").textContent=`${rows.length} punch event${rows.length!==1?"s":""} on this day`;
   const tbody=document.getElementById("punch-tbody");
@@ -852,14 +877,14 @@ function getEmpExportRows() {
     if (!dateMap[d]) dateMap[d] = {date:d, face:null, fp:null, ghr:null};
     dateMap[d][src] = r;
   };
-  faceData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
-  fpData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
-  ghrData.filter(r=>r.Name===name&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
+  faceData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"face"));
+  fpData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"fp"));
+  ghrData.filter(r=>empMatches(r)&&inRange(r.Date,from,to,month)).forEach(r=>addRec(r,"ghr"));
 
   let rows = Object.values(dateMap).map(row=>({
     ...row,
-    _hours: crossModeHours(row, name),
-    _totalPunches: countPunches(name, row.date)
+    _hours: crossModeHours(row),
+    _totalPunches: countPunches(row.date)
   }));
 
   rows.sort((a,b) => {
@@ -878,8 +903,8 @@ function getEmpExportRows() {
   const headers = ["Emp ID","Name","Team","Date","First In","Last Out","Hours","Total Punches","Status","Sources"];
   const dataRows = rows.map(row => {
     const uid = selectedEmp.ids[0]||"";
-    const firstIn = crossModeFirstIn(name, row.date);
-    const lastOut = crossModeLastOut(name, row.date);
+    const firstIn = crossModeFirstIn(row.date);
+    const lastOut = crossModeLastOut(row.date);
     const hours   = row._hours;
     const hoursNum = (hours === "—" || hours === undefined) ? 0 : Number(hours);
     const full = getExpectedHours(row.date);
