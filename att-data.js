@@ -32,6 +32,23 @@
     return (n || '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
   }
 
+  // Converts a 24-hour "HH:MM" or "HH:MM:SS" string into 12-hour
+  // "H:MM AM/PM" for display only. "—" and invalid input pass through
+  // unchanged. Never used for comparisons/sorting/hours math — those all
+  // keep using the original 24-hour strings internally.
+  function formatTime12h(t) {
+    if (!t || t === '—') return '—';
+    const parts = String(t).split(':');
+    if (parts.length < 2) return t;
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    if (isNaN(h) || !m) return t;
+    const period = h >= 12 ? 'PM' : 'AM';
+    let h12 = h % 12;
+    if (h12 === 0) h12 = 12;
+    return `${h12}:${m} ${period}`;
+  }
+
   // Punch records carry the Employee ID under different field names
   // depending on source (face/fingerprint use "User ID", Great HR uses
   // "Employee No"). This is confirmed reliable even when the Name spelling
@@ -320,13 +337,15 @@
     );
 
     // Group Employee Master rows by Employee ID, since the same ID can appear
-    // with multiple name spellings (e.g. "Vigneshwaran R," vs "Vigneshwaran.R").
+    // with multiple name spellings (e.g. "Vigneshwaran R," vs "Vigneshwaran.R")
+    // AND with inconsistent leading-zero padding (e.g. "076" vs "76") — both
+    // normalized here via normalizeId so they always land in the same group.
     // Rows with no Employee ID are kept as their own separate entries.
     const groups = {};
     let noIdCounter = 0;
 
     (master || []).forEach(e => {
-      const rawId = e['Employee ID'] ? String(e['Employee ID']).trim() : '';
+      const rawId = e['Employee ID'] ? normalizeId(e['Employee ID']) : '';
       const rawName = e['Employee Name'] ? String(e['Employee Name']).trim() : '';
       const team = e['Team'] || '';
       const groupKey = rawId || `__noid_${noIdCounter++}`;
@@ -393,10 +412,12 @@
     buildTeamLookup,
     getTeam,
     listTeams,
+    getNameGroups,
     isSunday,
     isWorkingDay,
     getPunchId,
     normalizeId,
+    formatTime12h,
     getCrossModeTimes,
     getCrossModeTimesForNames,
     getCrossModeTimesForId,
