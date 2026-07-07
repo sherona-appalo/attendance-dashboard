@@ -292,7 +292,6 @@ tbody tr:hover .badge{
     <div class="sep"></div>
     <button class="btn-clr" onclick="clearFilters()">✕ Clear</button>
     <button class="btn-clr" onclick="exportEmpExcel()">⬇ Excel</button>
-    <button class="btn-clr" onclick="exportEmpCSV()">⬇ CSV</button>
     <button class="btn-clr" onclick="window.print()">🖨 Print</button>
     <span class="count-pill" id="count-pill">—</span>
   </div>
@@ -929,18 +928,6 @@ function exportEmpExcel() {
   a.download = `${selectedEmp.name}_attendance.xls`;
   a.click();
 }
-
-function exportEmpCSV() {
-  const {headers, dataRows} = getEmpExportRows();
-  if (!dataRows.length) return;
-  const csvRows = [headers.join(","), ...dataRows.map(cols=>cols.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(","))];
-  const blob = new Blob([csvRows.join("\n")], {type:"text/csv"});
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `${selectedEmp.name}_attendance.csv`;
-  a.click();
-}
-
 function closePanel(){
   document.getElementById("overlay").classList.remove("open");
   document.getElementById("panel").classList.remove("open");

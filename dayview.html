@@ -423,7 +423,6 @@ async function loadDay(){
       <select id="day-team-filter" onchange="renderDayTable()">${teamOptionsHtml}</select>
       <span class="day-count" id="day-count">—</span>
       <button class="btn-back" onclick="exportDayExcel()" style="margin-left:8px">⬇ Excel</button>
-      <button class="btn-back" onclick="exportDayCSV()">⬇ CSV</button>
       <button class="btn-back" onclick="printDayView()">🖨 Print</button>
     </div>
     <div class="table-wrap">
@@ -810,18 +809,6 @@ function exportDayExcel() {
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download=`attendance_${date}_${currentView==="absent"?"absent":currentTab}.xls`;
-  a.click();
-}
-
-function exportDayCSV() {
-  const {headers,dataRows}=getDayExportRows();
-  if(!dataRows.length)return;
-  const date=document.getElementById("dayPicker").value;
-  const csvRows=[headers.join(","),...dataRows.map(cols=>cols.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(","))];
-  const blob=new Blob([csvRows.join("\n")],{type:"text/csv"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=`attendance_${date}_${currentView==="absent"?"absent":currentTab}.csv`;
   a.click();
 }
 

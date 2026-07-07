@@ -403,7 +403,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
 
   <div class="action-row">
     <button class="btn-generate" id="btnGenerate" onclick="generateReport()" disabled>⚡ Generate Report</button>
-    <button class="btn-export" id="btnExport" onclick="exportCSV()">⬇ Export CSV</button>
     <button class="btn-clear" onclick="clearAll()">✕ Clear</button>
   </div>
 </div>
@@ -420,7 +419,6 @@ tbody tr:hover .badge{transform:translateY(-1px);}
       </div>
       <div class="export-action-row">
         <button class="btn-exp excel" onclick="exportExcel()">📊 Excel</button>
-        <button class="btn-exp csv"   onclick="exportCSV()">📄 CSV</button>
         <button class="btn-exp print" onclick="printReport()">🖨 Print</button>
       </div>
     </div>
@@ -1515,19 +1513,6 @@ function buildExportRows(){
     return Object.values(r);
   });
   return{headers,dataRows};
-}
-
-/* ── Export CSV ── */
-function exportCSV(){
-  if(!filteredRows.length){alert("No data to export.");return;}
-  const title=document.getElementById("resultsTitle").textContent;
-  const{headers,dataRows}=buildExportRows();
-  const csvRows=[headers.join(","),...dataRows.map(cols=>cols.map(c=>`"${String(c??'').replace(/"/g,'""')}"`).join(","))];
-  const blob=new Blob([csvRows.join("\n")],{type:"text/csv"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download=`${title.replace(/\s+/g,"_")}.csv`;
-  a.click();
 }
 
 /* ── Export Excel ── */
