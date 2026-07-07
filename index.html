@@ -566,8 +566,8 @@ shown===total
       <td><div class="emp">${r.Name||"—"}</div></td>
       <td>${teamHtml}</td>
       <td><div class="date-val">${formatDate(r.Date)}</div></td>
-      <td>${(()=>{const s=getLoginStatus(r._firstIn);return s?`<span style="color:${s.color};font-weight:600;cursor:default" title="${s.tooltip}">${r._firstIn}</span>`:`<span style="color:var(--muted)">—</span>`;})()}</td>
-      <td class="t-out">${r._lastOut}</td>
+      <td>${(()=>{const s=getLoginStatus(r._firstIn);return s?`<span style="color:${s.color};font-weight:600;cursor:default" title="${s.tooltip}">${window.AttData.formatTime12h(r._firstIn)}</span>`:`<span style="color:var(--muted)">—</span>`;})()}</td>
+      <td class="t-out">${window.AttData.formatTime12h(r._lastOut)}</td>
       <td class="hrs">${hours === "—" ? "—" : formatHours(hours)}</td>
       <td class="pnch">${pnchHtml}</td>
       <td><span class="badge ${cls}">${label}</span></td>
@@ -602,8 +602,8 @@ function openPanel(name, date, uid){
   if(ghrData.some(r=>r.Name===name&&(r.Date||"").slice(0,10)===date))   modes.push(`<span class="mode-pill mode-ghr">📱 Great HR</span>`);
   document.getElementById("pe-modes").innerHTML=modes.join("");
 
-  document.getElementById("ps-firstin").textContent  = firstIn;
-  document.getElementById("ps-lastout").textContent  = lastOut;
+  document.getElementById("ps-firstin").textContent  = window.AttData.formatTime12h(firstIn);
+  document.getElementById("ps-lastout").textContent  = window.AttData.formatTime12h(lastOut);
   document.getElementById("ps-punches").textContent  = totalPunches;
 
   renderPunchTable();
@@ -646,7 +646,7 @@ function renderPunchTable(){
       :`<span class="mode-pill mode-ghr">📱 GHR</span>`;
     return`<tr>
       <td style="color:var(--muted);font-size:12px;text-align:center">${j+1}</td>
-      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${p.Time}</td>
+      <td class="${tc}" style="font-size:16px;font-weight:700;letter-spacing:.03em">${window.AttData.formatTime12h(p.Time)}</td>
       <td style="font-size:13px">${label}</td>
       <td>${mp}</td>
       <td style="font-size:13px;color:var(--muted)">${p.Device||"—"}</td>
